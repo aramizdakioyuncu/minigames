@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PuckArena - Çok Oyunculu Disk Futbolu & Mini Oyunlar Arenası</title>
+  <meta name="description" content="Tarayıcıda gerçek zamanlı oynanabilen 2D Disk Futbolu, Sumo Knockout ve Agar büyüme mini oyunlar arenası.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Background Animated Cyber Grid -->
+  <div class="cyber-bg">
+    <div class="grid-overlay"></div>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+  </div>
+
+  <!-- App Wrapper -->
+  <div id="app">
+
+    <!-- 1. LOGIN / PROFILE VIEW -->
+    <div id="view-profile" class="screen-view active">
+      <div class="glass-card login-card">
+        <div class="brand-header">
+          <div class="brand-icon">⚽</div>
+          <h1 class="brand-title">PUCK<span class="highlight">ARENA</span></h1>
+          <p class="brand-subtitle">Çok Oyunculu Disk Futbolu & Mini Oyunlar</p>
+        </div>
+
+        <div class="form-group">
+          <label for="input-nickname">Oyuncu Takma Adı</label>
+          <div class="input-wrapper">
+            <span class="input-icon">👤</span>
+            <input type="text" id="input-nickname" maxlength="15" placeholder="Adını yaz..." autofocus autocomplete="off">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Avatar Seç</label>
+          <div class="avatar-picker" id="avatar-picker">
+            <button class="avatar-option selected" data-avatar="⚽">⚽</button>
+            <button class="avatar-option" data-avatar="🔥">🔥</button>
+            <button class="avatar-option" data-avatar="⚡">⚡</button>
+            <button class="avatar-option" data-avatar="🥊">🥊</button>
+            <button class="avatar-option" data-avatar="👑">👑</button>
+            <button class="avatar-option" data-avatar="🎯">🎯</button>
+            <button class="avatar-option" data-avatar="🐺">🐺</button>
+            <button class="avatar-option" data-avatar="🚀">🚀</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Disk Rengi</label>
+          <div class="color-picker" id="color-picker">
+            <button class="color-option selected" data-color="#3b82f6" style="--c: #3b82f6;"></button>
+            <button class="color-option" data-color="#ef4444" style="--c: #ef4444;"></button>
+            <button class="color-option" data-color="#10b981" style="--c: #10b981;"></button>
+            <button class="color-option" data-color="#f59e0b" style="--c: #f59e0b;"></button>
+            <button class="color-option" data-color="#8b5cf6" style="--c: #8b5cf6;"></button>
+            <button class="color-option" data-color="#ec4899" style="--c: #ec4899;"></button>
+            <button class="color-option" data-color="#06b6d4" style="--c: #06b6d4;"></button>
+          </div>
+        </div>
+
+        <button id="btn-enter-lobby" class="btn btn-primary btn-large">
+          <span>Lobiye Giriş Yap</span>
+          <span class="btn-arrow">➔</span>
+        </button>
+
+        <div class="server-status-pill">
+          <span class="status-dot"></span>
+          <span id="txt-server-status">WebSocket Sunucusuna Bağlanıyor...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. LOBBY VIEW -->
+    <div id="view-lobby" class="screen-view">
+      <!-- Lobby Header -->
+      <header class="lobby-header">
+        <div class="brand-mini">
+          <span class="brand-icon-sm">⚽</span>
+          <h2>PUCK<span class="highlight">ARENA</span></h2>
+        </div>
+
+        <div class="user-chip">
+          <span class="user-avatar-badge" id="lobby-user-avatar">⚽</span>
+          <span class="user-name-text" id="lobby-user-name">Oyuncu</span>
+        </div>
+
+        <div class="header-actions">
+          <button id="btn-sound-toggle" class="btn-icon" title="Sesi Aç/Kapat">🔊</button>
+          <button id="btn-open-create-room" class="btn btn-success">
+            <span>+ Yeni Oda Kur</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Lobby Content -->
+      <main class="lobby-main">
+        <!-- Game Modes Banner -->
+        <div class="modes-carousel">
+          <div class="mode-card card-puck">
+            <div class="mode-badge">Futbol</div>
+            <h3>⚽ Disk Futbolu</h3>
+            <p>2D takım futbolu! Şut çek, topu tut, çalım at, golleri sırala.</p>
+          </div>
+          <div class="mode-card card-space">
+            <div class="mode-badge">Gizli Rol</div>
+            <h3>🚀 Uzay Casusu</h3>
+            <p>Görevleri yap, casusu bul veya gizlice mürettebatı avla!</p>
+          </div>
+          <div class="mode-card card-sumo">
+            <div class="mode-badge">Battle Royale</div>
+            <h3>🥊 Sumo Knockout</h3>
+            <p>Daralan halkada rakiplerini dışarı it!</p>
+          </div>
+          <div class="mode-card card-agar">
+            <div class="mode-badge">Büyüme</div>
+            <h3>🟢 Agar Bump & Feed</h3>
+            <p>Yemleri yut, kütleni katla ve haritaya hükmet.</p>
+          </div>
+        </div>
+
+        <!-- Room Filters & Table -->
+        <div class="rooms-container glass-card">
+          <div class="rooms-toolbar">
+            <div class="filter-tabs">
+              <button class="tab-btn active" data-filter="all">Tüm Odalar</button>
+              <button class="tab-btn" data-filter="puck">⚽ Disk Futbolu</button>
+              <button class="tab-btn" data-filter="space">🚀 Uzay Casusu</button>
+              <button class="tab-btn" data-filter="sumo">🥊 Sumo</button>
+              <button class="tab-btn" data-filter="agar">🟢 Agar</button>
+            </div>
+            <button id="btn-refresh-rooms" class="btn btn-secondary btn-sm">
+              <span>Yenile 🔄</span>
+            </button>
+          </div>
+
+          <div class="rooms-list" id="rooms-list">
+            <!-- Dynamic Room Items Injected Here -->
+            <div class="rooms-loading">Odalar yükleniyor...</div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- 3. CREATE ROOM MODAL -->
+    <div id="modal-create-room" class="modal-overlay">
+      <div class="glass-card modal-card">
+        <div class="modal-header">
+          <h3>Yeni Oda Oluştur</h3>
+          <button class="btn-close" id="btn-close-modal">✕</button>
+        </div>
+
+        <div class="form-group">
+          <label for="create-room-name">Oda Başlığı</label>
+          <input type="text" id="create-room-name" maxlength="24" placeholder="Oda adını yaz...">
+        </div>
+
+        <div class="form-group">
+          <label>Oyun Modu</label>
+          <div class="mode-select-grid">
+            <label class="mode-radio-card selected">
+              <input type="radio" name="create-room-mode" value="puck" checked>
+              <span class="mode-radio-icon">⚽</span>
+              <span class="mode-radio-title">Disk Futbolu</span>
+            </label>
+            <label class="mode-radio-card">
+              <input type="radio" name="create-room-mode" value="space">
+              <span class="mode-radio-icon">🚀</span>
+              <span class="mode-radio-title">Uzay Casusu</span>
+            </label>
+            <label class="mode-radio-card">
+              <input type="radio" name="create-room-mode" value="sumo">
+              <span class="mode-radio-icon">🥊</span>
+              <span class="mode-radio-title">Sumo Ring</span>
+            </label>
+            <label class="mode-radio-card">
+              <input type="radio" name="create-room-mode" value="agar">
+              <span class="mode-radio-icon">🟢</span>
+              <span class="mode-radio-title">Agar Feed</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Oyun Hızı & Dinamikler</label>
+          <div class="speed-select-grid">
+            <label class="speed-radio-card selected">
+              <input type="radio" name="create-room-speed" value="1.0" checked>
+              <span class="speed-icon">⚡</span>
+              <span class="speed-title">Normal (1.0x)</span>
+            </label>
+            <label class="speed-radio-card">
+              <input type="radio" name="create-room-speed" value="1.2">
+              <span class="speed-icon">🚀</span>
+              <span class="speed-title">Hızlı (1.2x)</span>
+            </label>
+            <label class="speed-radio-card">
+              <input type="radio" name="create-room-speed" value="1.45">
+              <span class="speed-icon">🔥</span>
+              <span class="speed-title">Turbo (1.45x)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="create-max-players">Maks. Oyuncu</label>
+            <select id="create-max-players">
+              <option value="2">2 Oyuncu (1v1 Düello)</option>
+              <option value="4">4 Oyuncu (2v2)</option>
+              <option value="6">6 Oyuncu (3v3)</option>
+              <option value="8" selected>8 Oyuncu (Standart 4v4)</option>
+              <option value="12">12 Oyuncu (Geniş Maç)</option>
+              <option value="16">16 Oyuncu (Kaos)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="create-match-time">Maç Süresi</label>
+            <select id="create-match-time">
+              <option value="120">2 Dakika (Hızlı)</option>
+              <option value="180" selected>3 Dakika (Standart)</option>
+              <option value="300">5 Dakika (Uzun)</option>
+              <option value="600">10 Dakika (Maraton)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label" style="margin-bottom: 0;">
+            <input type="checkbox" id="create-tackle-enabled" checked>
+            <span>🥊 Sert Müdahale (Oyunculara Vurma / Tackle Açık)</span>
+          </label>
+          <small class="form-hint">Açık olduğunda oyuncular birbirine çarptığında fiziksel itme/sarsıntı oluşur.</small>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="create-room-private">
+            <span>Gizli Oda (Sadece bağlantı/ID ile girilebilir)</span>
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button id="btn-cancel-create" class="btn btn-secondary">İptal</button>
+          <button id="btn-submit-create-room" class="btn btn-primary">Odayı Başlat 🚀</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. GAME VIEW SCREEN -->
+    <div id="view-game" class="screen-view">
+      <!-- Game Canvas -->
+      <canvas id="game-canvas"></canvas>
+
+      <!-- HUD: Top Scoreboard -->
+      <div class="hud-top" id="hud-top">
+        <!-- Puck Soccer Scoreboard -->
+        <div class="scoreboard-puck hidden" id="hud-puck">
+          <div class="team-score team-red">
+            <span class="team-label">KIRMIZI</span>
+            <span class="score-num" id="score-red">0</span>
+          </div>
+          <div class="match-time" id="match-timer">03:00</div>
+          <div class="team-score team-blue">
+            <span class="score-num" id="score-blue">0</span>
+            <span class="team-label">MAVİ</span>
+          </div>
+        </div>
+
+        <!-- Sumo Info -->
+        <div class="scoreboard-sumo hidden" id="hud-sumo">
+          <div class="sumo-badge">🥊 Çember Daralıyor</div>
+          <div class="sumo-status" id="sumo-status-text">Mücadele Başladı!</div>
+        </div>
+
+        <!-- Agar Info -->
+        <div class="scoreboard-agar hidden" id="hud-agar">
+          <div class="agar-score-badge">Puan / Kütle: <span id="agar-my-score">0</span></div>
+        </div>
+
+        <!-- Space Impostor Task Bar & Role HUD -->
+        <div class="scoreboard-space hidden" id="hud-space">
+          <div class="space-task-box">
+            <div class="task-bar-header">
+              <span>GÖREV İLERLEMESİ</span>
+              <span id="task-percent-text">0%</span>
+            </div>
+            <div class="task-bar-track">
+              <div class="task-bar-fill" id="task-progress-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+          <div class="space-role-pill" id="space-role-badge">🛠️ MÜRETTEBAT</div>
+        </div>
+      </div>
+
+      <!-- HUD: Top Actions (Ping, FPS, Leave) -->
+      <div class="hud-top-right">
+        <div class="stat-pill"><span id="ping-display">-- ms</span></div>
+        <div class="stat-pill"><span id="fps-display">60 FPS</span></div>
+        <button id="btn-leave-game" class="btn btn-danger btn-sm">Lobiden Çık</button>
+      </div>
+
+      <!-- HUD: Team Switcher -->
+      <div class="hud-team-switcher hidden" id="hud-team-switcher">
+        <button class="btn-team btn-team-red" data-team="red">🔴 Kırmızı</button>
+        <button class="btn-team btn-team-spec" data-team="spec">👁️ Tribün / İzle</button>
+        <button class="btn-team btn-team-blue" data-team="blue">🔵 Mavi</button>
+      </div>
+
+      <!-- HUD: In-Game Chat Box -->
+      <div class="hud-chat" id="hud-chat">
+        <div class="chat-messages" id="chat-messages"></div>
+        <form class="chat-input-form" id="chat-form">
+          <input type="text" id="chat-input" placeholder="Mesaj yaz (Enter)..." autocomplete="off" maxlength="100">
+        </form>
+      </div>
+
+      <!-- HUD: Agar & Sumo Leaderboard / Scoreboard -->
+      <div class="hud-leaderboard glass-card hidden" id="hud-leaderboard">
+        <div class="leaderboard-title">
+          <span>🏆 Liderlik Tablosu</span>
+        </div>
+        <div class="leaderboard-list" id="leaderboard-list">
+          <!-- Dynamic Items -->
+        </div>
+      </div>
+
+      <!-- HUD: Notification / Goal Banner -->
+      <div class="goal-announcement hidden" id="goal-announcement">
+        <div class="goal-text" id="goal-text">⚽ GOL!</div>
+        <div class="goal-scorer" id="goal-scorer">Oyuncu</div>
+      </div>
+
+      <!-- HUD: Role Reveal Banner -->
+      <div class="role-reveal-banner hidden" id="role-reveal-banner">
+        <div class="role-reveal-title" id="role-reveal-title">SENİN ROLÜN</div>
+        <div class="role-reveal-desc" id="role-reveal-desc">Görevleri tamamla ve hayatta kal!</div>
+      </div>
+
+      <!-- 5. EMERGENCY MEETING & VOTING MODAL -->
+      <div id="modal-emergency-meeting" class="modal-overlay hidden">
+        <div class="glass-card meeting-card">
+          <div class="meeting-header">
+            <div class="meeting-siren">🚨</div>
+            <div class="meeting-info">
+              <h2>ACİL DURUM TOPLANTISI</h2>
+              <p id="meeting-reason-text">Bir ceset bulundu veya butona basıldı!</p>
+            </div>
+            <div class="meeting-timer-badge">
+              ⏱️ <span id="meeting-timer-text">30</span>s
+            </div>
+          </div>
+
+          <div class="meeting-players-grid" id="meeting-players-grid">
+            <!-- Dynamic Player Voting Cards -->
+          </div>
+
+          <div class="meeting-footer">
+            <button id="btn-skip-vote" class="btn btn-secondary">Pas Geç (Oy Kullanma)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile On-Screen Controls (Touch) -->
+      <div class="mobile-controls" id="mobile-controls">
+        <div class="joystick-zone" id="joystick-zone">
+          <div class="joystick-base">
+            <div class="joystick-knob" id="joystick-knob"></div>
+          </div>
+        </div>
+        <div class="action-btn-zone">
+          <button class="btn-action-touch btn-action-report hidden" id="btn-touch-report">🚨 RAPOR</button>
+          <button class="btn-action-touch btn-action-vent hidden" id="btn-touch-vent">🌀 VENT</button>
+          <button class="btn-action-touch btn-action-hold" id="btn-touch-hold">🧲 TUT</button>
+          <button class="btn-action-touch" id="btn-touch-action">⚡ ŞUT</button>
+        </div>
+      </div>
+
+      <!-- Controls Hint Helper -->
+      <div class="controls-hint" id="controls-hint">
+        <span>🎮 <b>WASD:</b> Hareket</span>
+        <span id="hint-action">⚡ <b>Boşluk / Sol Tık:</b> Şut</span>
+        <span id="hint-hold">🧲 <b>Shift / E / Sağ Tık:</b> Top Tutma</span>
+        <span id="hint-extra" class="hidden"></span>
+        <span>💬 <b>Enter:</b> Sohbet</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Game Scripts -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+services:
+  # 1. Signalling & REST API Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ball_arena_backend
+    restart: always
+    environment:
+      - PORT=${BACKEND_PORT:-4000}
+    ports:
+      - "${BACKEND_PORT:-4000}:${BACKEND_PORT:-4000}"
+    networks:
+      - ball_net
+
+  # 2. Real-Time Game Physics & WebSocket Engine
+  socket:
+    build:
+      context: ./socket
+      dockerfile: Dockerfile
+    container_name: ball_arena_socket
+    restart: always
+    environment:
+      - PORT=${SOCKET_PORT:-5050}
+    volumes:
+      - socket_data:/app/data
+    ports:
+      - "${SOCKET_PORT:-5050}:${SOCKET_PORT:-5050}"
+    networks:
+      - ball_net
+
+  # 3. Web Client & Reverse Proxy (Tek Dışarı Açık Giriş Noktası)
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: ball_arena_web
+    restart: always
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - backend
+      - socket
+    networks:
+      - ball_net
+
+networks:
+  ball_net:
+    driver: bridge
+
+volumes:
+  socket_data:
+

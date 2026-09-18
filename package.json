@@ -1,0 +1,12 @@
+{
+  "name": "puckarena-monorepo",
+  "version": "1.0.0",
+  "description": "Multiplayer 2D Puck Soccer, Sumo & Agar Arcade Platform",
+  "scripts": {
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "install:all": "cd backend && npm install && cd ../socket && npm install",
+    "start:backend": "cd backend && npm start",
+    "start:socket": "cd socket && npm start"
+  }
+}

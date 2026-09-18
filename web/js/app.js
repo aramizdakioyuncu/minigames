@@ -1,0 +1,418 @@
+import { SocketClient } from './socketClient.js';
+import { GameRenderer } from './renderer.js';
+import { InputController } from './input.js';
+import { audio } from './audio.js';
+import { UIController } from './ui.js';
+
+class GameApp {
+  constructor() {
+    this.ui = new UIController();
+    this.socket = new SocketClient();
+    this.input = new InputController();
+    this.canvas = document.getElementById('game-canvas');
+    this.renderer = new GameRenderer(this.canvas);
+
+    this.profile = {
+      name: localStorage.getItem('ball_name') || '',
+      avatar: localStorage.getItem('ball_avatar') || '⚽',
+      color: localStorage.getItem('ball_color') || '#3b82f6'
+    };
+
+    this.currentRoom = null;
+    this.lastGameState = null;
+    this.fps = 60;
+    this.lastFrameTime = performance.now();
+    this.frameCount = 0;
+
+    this.init();
+  }
+
+  init() {
+    this.bindProfileControls();
+    this.bindLobbyControls();
+    this.bindGameControls();
+    this.bindSocketEvents();
+
+    // Connect to WebSocket Server
+    this.socket.connect().then(() => {
+      this.ui.setServerStatus(true);
+    }).catch(() => {
+      this.ui.setServerStatus(false);
+    });
+
+    // Start 60 FPS Render & Input Loop
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  bindProfileControls() {
+    // Fill saved name
+    if (this.profile.name) {
+      this.ui.inputNickname.value = this.profile.name;
+    }
+
+    // Avatar Selection
+    const avatarBtns = document.querySelectorAll('.avatar-option');
+    avatarBtns.forEach(btn => {
+      if (btn.dataset.avatar === this.profile.avatar) {
+        avatarBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      }
+      btn.addEventListener('click', () => {
+        avatarBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        this.profile.avatar = btn.dataset.avatar;
+        localStorage.setItem('ball_avatar', this.profile.avatar);
+      });
+    });
+
+    // Color Selection
+    const colorBtns = document.querySelectorAll('.color-option');
+    colorBtns.forEach(btn => {
+      if (btn.dataset.color === this.profile.color) {
+        colorBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+      }
+      btn.addEventListener('click', () => {
+        colorBtns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        this.profile.color = btn.dataset.color;
+        localStorage.setItem('ball_color', this.profile.color);
+      });
+    });
+
+    // Enter Lobby Button
+    this.ui.btnEnterLobby.addEventListener('click', () => {
+      audio.init();
+      const rawName = this.ui.inputNickname.value.trim();
+      this.profile.name = rawName.length > 0 ? rawName : 'Oyuncu_' + Math.floor(Math.random() * 900 + 100);
+      localStorage.setItem('ball_name', this.profile.name);
+
+      this.ui.lobbyUserName.textContent = this.profile.name;
+      this.ui.lobbyUserAvatar.textContent = this.profile.avatar;
+      this.ui.showView('view-lobby');
+      this.socket.send({ type: 'get_rooms' });
+    });
+  }
+
+  bindLobbyControls() {
+    // Filter tabs
+    const filterBtns = document.querySelectorAll('.tab-btn');
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.ui.activeFilter = btn.dataset.filter;
+        this.socket.send({ type: 'get_rooms' });
+      });
+    });
+
+    // Refresh rooms
+    this.ui.btnRefreshRooms.addEventListener('click', () => {
+      this.socket.send({ type: 'get_rooms' });
+    });
+
+    // Audio Toggle
+    if (this.ui.btnSoundToggle) {
+      this.ui.btnSoundToggle.addEventListener('click', () => {
+        const isMuted = audio.toggleMute();
+        this.ui.btnSoundToggle.textContent = isMuted ? '🔇' : '🔊';
+      });
+    }
+
+    // Modal Create Room
+    if (this.ui.btnOpenCreateRoom) {
+      this.ui.btnOpenCreateRoom.addEventListener('click', () => {
+        if (this.ui.modalCreateRoom) this.ui.modalCreateRoom.classList.add('active');
+      });
+    }
+
+    if (this.ui.btnCloseModal) {
+      this.ui.btnCloseModal.addEventListener('click', () => {
+        if (this.ui.modalCreateRoom) this.ui.modalCreateRoom.classList.remove('active');
+      });
+    }
+
+    if (this.ui.btnCancelCreate) {
+      this.ui.btnCancelCreate.addEventListener('click', () => {
+        if (this.ui.modalCreateRoom) this.ui.modalCreateRoom.classList.remove('active');
+      });
+    }
+
+    // Mode Radio Selection
+    const modeCards = document.querySelectorAll('.mode-radio-card');
+    modeCards.forEach(card => {
+      card.addEventListener('click', () => {
+        modeCards.forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        card.querySelector('input').checked = true;
+      });
+    });
+
+    // Speed Radio Selection
+    const speedCards = document.querySelectorAll('.speed-radio-card');
+    speedCards.forEach(card => {
+      card.addEventListener('click', () => {
+        speedCards.forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        card.querySelector('input').checked = true;
+      });
+    });
+
+    // Submit Create Room
+    this.ui.btnSubmitCreateRoom.addEventListener('click', () => {
+      const roomName = this.ui.createRoomName.value.trim() || `${this.profile.name}'in Odası`;
+      const selectedMode = document.querySelector('input[name="create-room-mode"]:checked')?.value || 'puck';
+      const selectedSpeed = parseFloat(document.querySelector('input[name="create-room-speed"]:checked')?.value) || 1.0;
+      const maxPlayers = parseInt(this.ui.createMaxPlayers.value) || 8;
+      const matchDuration = parseInt(document.getElementById('create-match-time')?.value) || 180;
+      const tackleEnabled = !!document.getElementById('create-tackle-enabled')?.checked;
+
+      this.socket.createRoom({
+        name: roomName,
+        mode: selectedMode,
+        speedMultiplier: selectedSpeed,
+        matchDuration,
+        tackleEnabled,
+        maxPlayers
+      });
+
+      this.ui.modalCreateRoom.classList.remove('active');
+      setTimeout(() => this.socket.send({ type: 'get_rooms' }), 200);
+    });
+
+    // Mobile Touch Hold Button
+    const btnTouchHold = document.getElementById('btn-touch-hold');
+    if (btnTouchHold) {
+      btnTouchHold.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        this.input.keys.hold = true;
+      });
+      btnTouchHold.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        this.input.keys.hold = false;
+      });
+    }
+  }
+
+  bindGameControls() {
+    // Leave Game Button
+    this.ui.btnLeaveGame.addEventListener('click', () => {
+      this.socket.leaveRoom();
+    });
+
+    // Team Switcher Buttons
+    const teamBtns = document.querySelectorAll('.btn-team');
+    teamBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetTeam = btn.dataset.team;
+        this.socket.changeTeam(targetTeam);
+      });
+    });
+
+    // Chat Form
+    this.ui.chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = this.ui.chatInput.value.trim();
+      if (text.length > 0) {
+        this.socket.sendChat(text);
+        this.ui.chatInput.value = '';
+      }
+      this.ui.chatInput.blur();
+      this.input.setChatting(false);
+    });
+
+    this.ui.chatInput.addEventListener('focus', () => this.input.setChatting(true));
+    this.ui.chatInput.addEventListener('blur', () => this.input.setChatting(false));
+
+    // Meeting voting controls
+    if (this.ui.meetingPlayersGrid) {
+      this.ui.meetingPlayersGrid.addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-vote');
+        if (btn && btn.dataset.id) {
+          this.socket.sendAction({ type: 'vote', targetId: btn.dataset.id });
+        }
+      });
+    }
+    if (this.ui.btnSkipVote) {
+      this.ui.btnSkipVote.addEventListener('click', () => {
+        this.socket.sendAction({ type: 'vote', targetId: 'skip' });
+      });
+    }
+
+    // Shortcut Enter to Chat
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && this.ui.currentView === 'view-game') {
+        if (document.activeElement !== this.ui.chatInput) {
+          e.preventDefault();
+          this.ui.chatInput.focus();
+        }
+      }
+    });
+  }
+
+  bindSocketEvents() {
+    this.socket.on('onConnect', () => {
+      this.ui.setServerStatus(true);
+    });
+
+    this.socket.on('onDisconnect', () => {
+      this.ui.setServerStatus(false);
+    });
+
+    this.socket.on('onInit', (data) => {
+      if (data.rooms) {
+        this.ui.renderRooms(data.rooms, (roomId) => this.joinRoom(roomId));
+      }
+    });
+
+    this.socket.on('onRoomsList', (rooms) => {
+      this.ui.renderRooms(rooms, (roomId) => this.joinRoom(roomId));
+    });
+
+    this.socket.on('onJoinedRoom', (roomData) => {
+      this.currentRoom = roomData;
+      this.myCurrentRole = null;
+      if (roomData && roomData.mode) {
+        this.ui.prepareGameHUD(roomData.mode);
+      }
+      this.ui.showView('view-game');
+      this.ui.chatMessages.innerHTML = '';
+      this.ui.addChatMessage('Sistem', `${roomData.roomName} odasına bağlandınız.`, '#38bdf8');
+    });
+
+    this.socket.on('onLeftRoom', (roomsData) => {
+      this.currentRoom = null;
+      this.lastGameState = null;
+      this.myCurrentRole = null;
+      this.ui.showView('view-lobby');
+      if (roomsData.rooms) {
+        this.ui.renderRooms(roomsData.rooms, (roomId) => this.joinRoom(roomId));
+      }
+    });
+
+    this.socket.on('onGameState', (state) => {
+      this.lastGameState = state;
+      this.ui.updateHUD(state, this.socket.myPlayerId);
+
+      // Check for space role reveal banner
+      if (state.mode === 'space' && state.players) {
+        const myP = state.players.find(p => p.id === this.socket.myPlayerId);
+        if (myP && myP.role && myP.role !== this.myCurrentRole) {
+          this.myCurrentRole = myP.role;
+          this.ui.showRoleReveal(myP.role);
+        }
+      }
+
+      // Process Game Events (SFX, Announcements)
+      if (state.events && state.events.length > 0) {
+        state.events.forEach(evt => {
+          if (evt.type === 'sfx_kick') {
+            audio.playKick();
+            this.renderer.addKickSparks(evt.x, evt.y);
+          } else if (evt.type === 'sfx_bump') {
+            audio.playBounce();
+          } else if (evt.type === 'sfx_dash') {
+            audio.playDash();
+          } else if (evt.type === 'sfx_pickup') {
+            audio.playPickup();
+          } else if (evt.type === 'sfx_split') {
+            audio.playSplit();
+            this.renderer.addKickSparks(evt.x, evt.y, '#38bdf8');
+          } else if (evt.type === 'sfx_eject') {
+            audio.playEject();
+          } else if (evt.type === 'sfx_eat_player') {
+            audio.playEatPlayer();
+            this.renderer.addKickSparks(evt.x, evt.y, '#f43f5e');
+            this.ui.addChatMessage('⚔️ Savaş', `${evt.eater}, ${evt.prey} adlı oyuncuyu yuttu!`, '#f43f5e');
+          } else if (evt.type === 'sfx_hold_start') {
+            audio.playMagnetHold();
+            this.renderer.addKickSparks(evt.x, evt.y, '#38bdf8');
+          } else if (evt.type === 'sfx_hold_release') {
+            audio.playKick();
+          } else if (evt.type === 'sfx_tackle') {
+            audio.playTackle();
+            this.renderer.addKickSparks(evt.x, evt.y, '#ef4444');
+          } else if (evt.type === 'sfx_kill') {
+            audio.playKill();
+            this.renderer.addKickSparks(evt.x, evt.y, '#ef4444');
+            this.ui.addChatMessage('💀 Cinayet', `${evt.killer || 'Bir casus'} bir mürettebatı ortadan kaldırdı!`, '#ef4444');
+          } else if (evt.type === 'sfx_vent') {
+            audio.playVent();
+          } else if (evt.type === 'sfx_task_complete') {
+            audio.playTaskComplete();
+            this.renderer.addKickSparks(evt.x, evt.y, '#10b981');
+          } else if (evt.type === 'emergency_meeting') {
+            audio.playEmergencySiren();
+            this.ui.showGoalBanner('🚨 ACİL TOPLANTI!', `${evt.caller} toplantı başlattı!`);
+          } else if (evt.type === 'meeting_result') {
+            if (evt.ejected) {
+              this.ui.showGoalBanner('🗳️ OYLAMA SONUCU', `${evt.ejected} uzay boşluğuna fırlatıldı!`);
+            } else {
+              this.ui.showGoalBanner('🗳️ OYLAMA SONUCU', 'Kimse atılmadı (Berabere / Pas).');
+            }
+          } else if (evt.type === 'game_over') {
+            this.ui.showGoalBanner('🏆 OYUN BİTTİ!', evt.winner === 'impostor' ? '🚨 Casuslar Kazandı!' : '✨ Mürettebat Kazandı!');
+          } else if (evt.type === 'goal') {
+            const myPlayer = (state.players || []).find(p => p.id === this.socket.myPlayerId);
+            if (myPlayer && myPlayer.team) {
+              if (myPlayer.team === evt.team) {
+                audio.playGoalScored();
+              } else if (myPlayer.team !== 'spec') {
+                audio.playGoalConceded();
+              } else {
+                audio.playGoalScored();
+              }
+            } else {
+              audio.playGoalScored();
+            }
+
+            this.renderer.addGoalCelebration(0, 0);
+            this.ui.showGoalBanner('⚽ GOL!', `${evt.scorer} (${evt.team === 'red' ? 'Kırmızı' : 'Mavi'})`);
+          } else if (evt.type === 'round_winner') {
+            this.ui.showGoalBanner('👑 KAZANAN!', evt.winner);
+          }
+        });
+      }
+    });
+
+    this.socket.on('onChat', (msg) => {
+      this.ui.addChatMessage(msg.sender, msg.text, msg.color);
+    });
+
+    this.socket.on('onPing', (pingMs) => {
+      this.ui.pingDisplay.textContent = `${pingMs} ms`;
+    });
+  }
+
+  joinRoom(roomId) {
+    audio.init();
+    this.socket.joinRoom(roomId, this.profile);
+  }
+
+  loop(currentTime) {
+    // FPS calculation
+    this.frameCount++;
+    if (currentTime - this.lastFrameTime >= 1000) {
+      this.fps = this.frameCount;
+      this.frameCount = 0;
+      this.lastFrameTime = currentTime;
+      if (this.ui.fpsDisplay) {
+        this.ui.fpsDisplay.textContent = `${this.fps} FPS`;
+      }
+    }
+
+    // If currently in a game room, send input and render frame
+    if (this.ui.currentView === 'view-game') {
+      const inputState = this.input.getState();
+      this.socket.sendInput(inputState);
+      this.renderer.render(this.lastGameState, this.socket.myPlayerId);
+    }
+
+    requestAnimationFrame((t) => this.loop(t));
+  }
+}
+
+// Bootstrap Application
+window.addEventListener('DOMContentLoaded', () => {
+  new GameApp();
+});

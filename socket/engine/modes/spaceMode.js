@@ -1,0 +1,551 @@
+import { Vec2, resolveCircleCollision, resolveSegmentCollision } from '../physics.js';
+import { configDb } from '../../db/configDb.js';
+
+export class SpaceMode {
+  constructor(room) {
+    this.room = room;
+    this.type = 'space';
+    this.name = 'Uzay Casusu (Spaceship Infiltration)';
+
+    // Spaceship Map Dimensions
+    this.width = 1800;
+    this.height = 1200;
+
+    this.gameState = 'playing'; // 'playing', 'meeting', 'game_over'
+    this.meetingTimer = 0;
+    this.meetingDuration = 30; // 30 seconds voting
+    this.ejectedPlayer = null;
+    this.winner = null; // 'crew' or 'impostor'
+
+    this.totalTasks = 0;
+    this.completedTasks = 0;
+    this.bodies = []; // Array of { id, x, y, color, avatar, name, killerId }
+    this.votes = new Map(); // voterId -> targetId ('skip' or playerId)
+
+    this.initMap();
+    this.initVents();
+    this.initTaskStations();
+  }
+
+  initMap() {
+    const hw = this.width / 2;
+    const hh = this.height / 2;
+
+    // Room boundaries and interior spaceship walls
+    this.walls = [
+      // Outer Ship Hull
+      { p1: new Vec2(-hw, -hh), p2: new Vec2(hw, -hh) },
+      { p1: new Vec2(-hw, hh), p2: new Vec2(hw, hh) },
+      { p1: new Vec2(-hw, -hh), p2: new Vec2(-hw, hh) },
+      { p1: new Vec2(hw, -hh), p2: new Vec2(hw, hh) },
+
+      // Cafeteria (Center) Walls with Door Openings
+      { p1: new Vec2(-250, -220), p2: new Vec2(-80, -220) },
+      { p1: new Vec2(80, -220), p2: new Vec2(250, -220) },
+      { p1: new Vec2(-250, 180), p2: new Vec2(-80, 180) },
+      { p1: new Vec2(80, 180), p2: new Vec2(250, 180) },
+      { p1: new Vec2(-250, -220), p2: new Vec2(-250, -60) },
+      { p1: new Vec2(-250, 60), p2: new Vec2(-250, 180) },
+      { p1: new Vec2(250, -220), p2: new Vec2(250, -60) },
+      { p1: new Vec2(250, 60), p2: new Vec2(250, 180) },
+
+      // Reactor & Engine (Left Room)
+      { p1: new Vec2(-650, -350), p2: new Vec2(-420, -350) },
+      { p1: new Vec2(-420, -350), p2: new Vec2(-420, -80) },
+      { p1: new Vec2(-420, 80), p2: new Vec2(-420, 350) },
+      { p1: new Vec2(-650, 350), p2: new Vec2(-420, 350) },
+
+      // Electrical (Bottom Left)
+      { p1: new Vec2(-600, 220), p2: new Vec2(-320, 220) },
+      { p1: new Vec2(-320, 220), p2: new Vec2(-320, 480) },
+
+      // Cockpit / Navigation (Right Room)
+      { p1: new Vec2(450, -280), p2: new Vec2(720, -280) },
+      { p1: new Vec2(450, -280), p2: new Vec2(450, -80) },
+      { p1: new Vec2(450, 80), p2: new Vec2(450, 280) },
+      { p1: new Vec2(450, 280), p2: new Vec2(720, 280) },
+
+      // MedBay / Revir (Top Room)
+      { p1: new Vec2(-220, -480), p2: new Vec2(220, -480) },
+      { p1: new Vec2(-220, -480), p2: new Vec2(-220, -320) },
+      { p1: new Vec2(220, -480), p2: new Vec2(220, -320) },
+
+      // Security / Kalkan (Bottom Room)
+      { p1: new Vec2(-180, 280), p2: new Vec2(180, 280) },
+      { p1: new Vec2(-180, 280), p2: new Vec2(-180, 480) },
+      { p1: new Vec2(180, 280), p2: new Vec2(180, 480) }
+    ];
+
+    // Room Label Zones for Mini-Map and Ambient lighting
+    this.roomsList = [
+      { id: 'cafeteria', name: 'Kafeterya (Merkez)', x: 0, y: -20, w: 480, h: 380, icon: '☕' },
+      { id: 'reactor', name: 'Reaktör & Motor', x: -550, y: 0, w: 260, h: 600, icon: '⚛️' },
+      { id: 'electrical', name: 'Elektrik & Jeneratör', x: -460, y: 350, w: 260, h: 240, icon: '⚡' },
+      { id: 'medbay', name: 'Revir (MedBay)', x: 0, y: -400, w: 420, h: 160, icon: '💊' },
+      { id: 'cockpit', name: 'Kokpit & Seyir', x: 580, y: 0, w: 260, h: 540, icon: '🚀' },
+      { id: 'security', name: 'Güvenlik & Kalkan', x: 0, y: 380, w: 340, h: 200, icon: '🛡️' }
+    ];
+  }
+
+  initVents() {
+    // Interconnected Vents for Impostor
+    this.vents = [
+      { id: 'vent_elec', room: 'electrical', x: -480, y: 400, connectsTo: ['vent_react', 'vent_sec'] },
+      { id: 'vent_react', room: 'reactor', x: -540, y: -200, connectsTo: ['vent_elec', 'vent_med'] },
+      { id: 'vent_med', room: 'medbay', x: -140, y: -420, connectsTo: ['vent_react', 'vent_cafe'] },
+      { id: 'vent_cafe', room: 'cafeteria', x: 180, y: -160, connectsTo: ['vent_med', 'vent_cockpit'] },
+      { id: 'vent_cockpit', room: 'cockpit', x: 600, y: -180, connectsTo: ['vent_cafe', 'vent_sec'] },
+      { id: 'vent_sec', room: 'security', x: 100, y: 400, connectsTo: ['vent_cockpit', 'vent_elec'] }
+    ];
+  }
+
+  initTaskStations() {
+    // Tasks around the ship
+    this.taskStations = [
+      { id: 'task_wires_elec', room: 'electrical', name: '⚡ Kabloları Onar', x: -400, y: 300, icon: '⚡', timeSec: 2 },
+      { id: 'task_reactor_align', room: 'reactor', name: '⚛️ Reaktörü Soğut', x: -550, y: 150, icon: '⚛️', timeSec: 3 },
+      { id: 'task_scan_medbay', room: 'medbay', name: '💊 Biyometrik Tarama', x: 100, y: -420, icon: '💊', timeSec: 3 },
+      { id: 'task_steer_cockpit', room: 'cockpit', name: '🚀 Rotayı Belirle', x: 620, y: 120, icon: '🚀', timeSec: 2 },
+      { id: 'task_shields_sec', room: 'security', name: '🛡️ Kalkanları Güçlendir', x: -100, y: 420, icon: '🛡️', timeSec: 2 },
+      { id: 'task_trash_cafe', room: 'cafeteria', name: '☕ Çöpleri Boşalt', x: -180, y: 120, icon: '🗑️', timeSec: 2 }
+    ];
+  }
+
+  onPlayerJoin(player) {
+    player.radius = 18;
+    player.mass = 2.5;
+    player.damping = 0.92;
+    player.restitution = 0.4;
+    player.isAlive = true;
+    player.isSpectator = false;
+    player.role = 'crew'; // 'crew' or 'impostor'
+    player.killCooldown = 18; // 18 seconds
+    player.lastKillTime = Date.now();
+    player.isVented = false;
+    player.ventId = null;
+    player.currentTask = null;
+    player.taskProgress = 0;
+    player.completedTasksList = [];
+
+    // Spawn at Cafeteria Table
+    this.spawnAtCafeteria(player);
+
+    this.checkRolesDistribution();
+  }
+
+  spawnAtCafeteria(player) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 40 + Math.random() * 80;
+    player.pos.set(Math.cos(angle) * dist, Math.sin(angle) * dist);
+    player.vel.set(0, 0);
+    player.isVented = false;
+  }
+
+  checkRolesDistribution() {
+    const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
+    if (players.length < 2) {
+      // Solo practice mode: player can act as Impostor & Crewmate
+      players[0].role = 'impostor';
+      return;
+    }
+
+    const impostorCount = players.length >= 7 ? 2 : 1;
+    const currentImpostors = players.filter(p => p.role === 'impostor').length;
+
+    if (currentImpostors !== impostorCount) {
+      // Assign random Impostor
+      players.forEach(p => p.role = 'crew');
+      const shuffled = [...players].sort(() => Math.random() - 0.5);
+      for (let i = 0; i < impostorCount; i++) {
+        shuffled[i].role = 'impostor';
+        shuffled[i].lastKillTime = Date.now() + 5000; // 5s initial cooldown
+      }
+    }
+
+    this.calculateTaskTotal();
+  }
+
+  calculateTaskTotal() {
+    const crewCount = Array.from(this.room.players.values()).filter(p => !p.isSpectator && p.role === 'crew').length;
+    this.totalTasks = Math.max(1, crewCount * this.taskStations.length);
+  }
+
+  handlePlayerInput(player) {
+    if (!player.input || !player.isAlive || player.isSpectator) return;
+    const now = Date.now();
+
+    // 1. USE / TASK INTERACTION -> 'KeyE' or 'hold' / 'use'
+    if (player.input.hold || player.input.use) {
+      if (player.role === 'crew' && !player.isVented) {
+        // Check nearest task station
+        for (const task of this.taskStations) {
+          const dist = Math.hypot(player.pos.x - task.x, player.pos.y - task.y);
+          if (dist < 45 && !player.completedTasksList.includes(task.id)) {
+            player.taskProgress = (player.taskProgress || 0) + 0.025;
+            if (player.taskProgress >= 1.0) {
+              player.completedTasksList.push(task.id);
+              player.taskProgress = 0;
+              this.completedTasks++;
+              this.room.broadcastEvent({
+                type: 'sfx_task_complete',
+                playerId: player.id,
+                taskName: task.name
+              });
+              this.checkWinConditions();
+            }
+            break;
+          }
+        }
+      }
+    } else {
+      player.taskProgress = 0;
+    }
+
+    // 2. KILL MECHANIC (Impostor only) -> 'kick' or 'kill'
+    if (player.input.kick && player.role === 'impostor' && !player.isVented && this.gameState === 'playing') {
+      const cdElapsed = (now - player.lastKillTime) / 1000;
+      if (cdElapsed >= player.killCooldown) {
+        // Find nearest alive crewmate
+        const players = Array.from(this.room.players.values()).filter(p => p.id !== player.id && p.isAlive && !p.isSpectator && !p.isVented);
+        for (const target of players) {
+          const dist = Math.hypot(player.pos.x - target.pos.x, player.pos.y - target.pos.y);
+          if (dist < 60) {
+            // Kill target!
+            target.isAlive = false;
+            player.lastKillTime = now;
+
+            // Leave Dead Body
+            this.bodies.push({
+              id: 'body_' + Math.random().toString(36).substring(2, 8),
+              x: target.pos.x,
+              y: target.pos.y,
+              color: target.color,
+              avatar: target.avatar,
+              name: target.name,
+              killerId: player.id,
+              time: now
+            });
+
+            this.room.broadcastEvent({
+              type: 'sfx_kill',
+              killerId: player.id,
+              victimId: target.id,
+              x: target.pos.x,
+              y: target.pos.y
+            });
+
+            this.checkWinConditions();
+            break;
+          }
+        }
+      }
+    }
+
+    // 3. VENT MECHANIC (Impostor only) -> 'vent' or 'KeyV'
+    if (player.input.vent && player.role === 'impostor' && this.gameState === 'playing') {
+      if (!player.lastVentToggle || now - player.lastVentToggle > 500) {
+        player.lastVentToggle = now;
+        if (!player.isVented) {
+          // Enter nearest vent
+          for (const vent of this.vents) {
+            const dist = Math.hypot(player.pos.x - vent.x, player.pos.y - vent.y);
+            if (dist < 50) {
+              player.isVented = true;
+              player.ventId = vent.id;
+              player.pos.set(vent.x, vent.y);
+              player.vel.set(0, 0);
+              this.room.broadcastEvent({ type: 'sfx_vent', x: vent.x, y: vent.y });
+              break;
+            }
+          }
+        } else {
+          // Exit or cycle vent
+          const curVent = this.vents.find(v => v.id === player.ventId);
+          if (curVent && curVent.connectsTo && curVent.connectsTo.length > 0) {
+            // If movement direction pressed, jump to connected vent
+            if (player.input.left || player.input.right || player.input.up || player.input.down) {
+              const nextId = curVent.connectsTo[Math.floor(Math.random() * curVent.connectsTo.length)];
+              const nextVent = this.vents.find(v => v.id === nextId);
+              if (nextVent) {
+                player.ventId = nextVent.id;
+                player.pos.set(nextVent.x, nextVent.y);
+                this.room.broadcastEvent({ type: 'sfx_vent', x: nextVent.x, y: nextVent.y });
+              }
+            } else {
+              // Exit vent
+              player.isVented = false;
+              player.ventId = null;
+              this.room.broadcastEvent({ type: 'sfx_vent', x: player.pos.x, y: player.pos.y });
+            }
+          } else {
+            player.isVented = false;
+          }
+        }
+      }
+    }
+
+    // 4. REPORT BODY OR EMERGENCY BUTTON -> 'report' or 'KeyR'
+    if (player.input.report && this.gameState === 'playing') {
+      // Check emergency button at cafeteria (0, 0)
+      const distToButton = Math.hypot(player.pos.x, player.pos.y);
+      let canReport = distToButton < 65;
+
+      // Or check nearby dead bodies
+      let reportedBody = null;
+      for (const body of this.bodies) {
+        const dist = Math.hypot(player.pos.x - body.x, player.pos.y - body.y);
+        if (dist < 75) {
+          canReport = true;
+          reportedBody = body;
+          break;
+        }
+      }
+
+      if (canReport) {
+        this.startEmergencyMeeting(player.name, reportedBody ? `Ceset Bulundu: ${reportedBody.name}` : 'Acil Durum Butonuna Basıldı!');
+      }
+    }
+  }
+
+  startEmergencyMeeting(reporterName, reason) {
+    this.gameState = 'meeting';
+    this.meetingTimer = this.meetingDuration;
+    this.votes.clear();
+    this.bodies = []; // Clear bodies
+
+    // Teleport all alive players to Cafeteria Table
+    const players = Array.from(this.room.players.values());
+    players.forEach(p => {
+      this.spawnAtCafeteria(p);
+      p.taskProgress = 0;
+    });
+
+    this.room.broadcastEvent({
+      type: 'emergency_meeting',
+      reporter: reporterName,
+      reason: reason
+    });
+  }
+
+  castVote(voterId, targetId) {
+    if (this.gameState !== 'meeting') return;
+    this.votes.set(voterId, targetId);
+
+    // Check if all alive players voted
+    const aliveCount = Array.from(this.room.players.values()).filter(p => !p.isSpectator && p.isAlive).length;
+    if (this.votes.size >= aliveCount) {
+      this.resolveMeeting();
+    }
+  }
+
+  resolveMeeting() {
+    this.gameState = 'playing';
+    this.meetingTimer = 0;
+
+    // Tally votes
+    const voteCounts = new Map(); // targetId -> count
+    for (const [voter, target] of this.votes.entries()) {
+      if (target) {
+        voteCounts.set(target, (voteCounts.get(target) || 0) + 1);
+      }
+    }
+
+    let maxVotes = 0;
+    let ejectedId = null;
+    let isTie = false;
+
+    for (const [target, count] of voteCounts.entries()) {
+      if (count > maxVotes) {
+        maxVotes = count;
+        ejectedId = target;
+        isTie = false;
+      } else if (count === maxVotes) {
+        isTie = true;
+      }
+    }
+
+    let resultMsg = 'Oylama berabere sonuçlandı veya pas geçildi. Kimse atılmadı.';
+    let ejectedPlayer = null;
+
+    if (!isTie && ejectedId && ejectedId !== 'skip') {
+      const targetPlayer = this.room.players.get(ejectedId);
+      if (targetPlayer) {
+        targetPlayer.isAlive = false;
+        ejectedPlayer = {
+          name: targetPlayer.name,
+          role: targetPlayer.role,
+          wasImpostor: targetPlayer.role === 'impostor'
+        };
+        resultMsg = `${targetPlayer.name} uzay boşluğuna fırlatıldı! (${ejectedPlayer.wasImpostor ? 'BİR CASUSTU! 🔪' : 'Bir Mürettebattı 🛠️'})`;
+      }
+    }
+
+    this.room.broadcastEvent({
+      type: 'meeting_result',
+      ejected: ejectedPlayer,
+      message: resultMsg
+    });
+
+    this.votes.clear();
+    this.checkWinConditions();
+  }
+
+  checkWinConditions() {
+    const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
+    if (players.length < 2) return;
+
+    const aliveCrew = players.filter(p => p.isAlive && p.role === 'crew');
+    const aliveImpostors = players.filter(p => p.isAlive && p.role === 'impostor');
+
+    // 1. Crew wins by ejecting all impostors
+    if (aliveImpostors.length === 0) {
+      this.winner = 'crew';
+      this.gameState = 'game_over';
+      this.room.broadcastEvent({
+        type: 'game_over',
+        winner: 'crew',
+        message: '🎉 MÜRETTEBAT KAZANDI! Tüm Casuslar Uzaya Fırlatıldı!'
+      });
+      setTimeout(() => this.resetGame(), 5000);
+      return;
+    }
+
+    // 2. Crew wins by completing all tasks
+    if (this.totalTasks > 0 && this.completedTasks >= this.totalTasks) {
+      this.winner = 'crew';
+      this.gameState = 'game_over';
+      this.room.broadcastEvent({
+        type: 'game_over',
+        winner: 'crew',
+        message: '🛠️ MÜRETTEBAT KAZANDI! Tüm Görevler Tamamlandı!'
+      });
+      setTimeout(() => this.resetGame(), 5000);
+      return;
+    }
+
+    // 3. Impostors win if they equal or outnumber crew
+    if (aliveImpostors.length >= aliveCrew.length) {
+      this.winner = 'impostor';
+      this.gameState = 'game_over';
+      this.room.broadcastEvent({
+        type: 'game_over',
+        winner: 'impostor',
+        message: '🔪 CASUSLAR KAZANDI! Gemi Ele Geçirildi!'
+      });
+      setTimeout(() => this.resetGame(), 5000);
+      return;
+    }
+  }
+
+  resetGame() {
+    this.gameState = 'playing';
+    this.winner = null;
+    this.completedTasks = 0;
+    this.bodies = [];
+    this.votes.clear();
+
+    const players = Array.from(this.room.players.values());
+    players.forEach(p => {
+      p.isAlive = true;
+      p.completedTasksList = [];
+      p.taskProgress = 0;
+      this.spawnAtCafeteria(p);
+    });
+
+    this.checkRolesDistribution();
+  }
+
+  update(dt, secTimerTick) {
+    if (this.gameState === 'meeting') {
+      this.meetingTimer -= dt;
+      if (this.meetingTimer <= 0) {
+        this.resolveMeeting();
+      }
+      return;
+    }
+
+    const playerList = Array.from(this.room.players.values());
+
+    for (let i = 0; i < playerList.length; i++) {
+      const p1 = playerList[i];
+      if (p1.isSpectator || !p1.isAlive) continue;
+
+      this.handlePlayerInput(p1);
+
+      if (!p1.isVented) {
+        this.applyPlayerMovement(p1, dt);
+        p1.update(dt);
+
+        // Wall collisions
+        for (const wall of this.walls) {
+          resolveSegmentCollision(p1, wall.p1, wall.p2, 0.4);
+        }
+
+        // Collisions between players
+        for (let j = i + 1; j < playerList.length; j++) {
+          const p2 = playerList[j];
+          if (p2.isSpectator || !p2.isAlive || p2.isVented) continue;
+          resolveCircleCollision(p1, p2);
+        }
+      }
+    }
+  }
+
+  applyPlayerMovement(player, dt) {
+    if (!player.input) return;
+    const accel = 1.05 * (this.room.speedMultiplier || 1.0);
+    const maxSpeed = 5.2 * (this.room.speedMultiplier || 1.0);
+
+    let ax = 0;
+    let ay = 0;
+
+    if (player.input.up) ay -= 1;
+    if (player.input.down) ay += 1;
+    if (player.input.left) ax -= 1;
+    if (player.input.right) ax += 1;
+
+    if (ax !== 0 && ay !== 0) {
+      ax *= 0.7071;
+      ay *= 0.7071;
+    }
+
+    player.vel.x += ax * accel;
+    player.vel.y += ay * accel;
+
+    const currentSpeed = Math.hypot(player.vel.x, player.vel.y);
+    if (currentSpeed > maxSpeed) {
+      player.vel.x = (player.vel.x / currentSpeed) * maxSpeed;
+      player.vel.y = (player.vel.y / currentSpeed) * maxSpeed;
+    }
+  }
+
+  getState() {
+    const playerList = Array.from(this.room.players.values());
+
+    return {
+      mode: 'space',
+      width: this.width,
+      height: this.height,
+      gameState: this.gameState,
+      meetingTimer: Math.ceil(this.meetingTimer),
+      totalTasks: this.totalTasks,
+      completedTasks: this.completedTasks,
+      taskProgressRatio: this.totalTasks > 0 ? Math.round((this.completedTasks / this.totalTasks) * 100) : 0,
+      bodies: this.bodies,
+      rooms: this.roomsList,
+      vents: this.vents,
+      taskStations: this.taskStations,
+      walls: this.walls.map(w => ({ p1: { x: w.p1.x, y: w.p1.y }, p2: { x: w.p2.x, y: w.p2.y } })),
+      playersMeta: playerList.map(p => ({
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar,
+        color: p.color,
+        isAlive: p.isAlive,
+        isVented: p.isVented,
+        role: p.role, // Filtered in client UI for own role / or shown to all in debug
+        hasVoted: this.votes.has(p.id)
+      }))
+    };
+  }
+}
