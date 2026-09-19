@@ -1,5 +1,3 @@
-// High-Performance WebGL (PixiJS) & Hardware-Accelerated Rendering Engine
-
 export class GameRenderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -12,6 +10,9 @@ export class GameRenderer {
     // Smooth Entity Interpolation Cache (id -> { x, y, vx, vy, r })
     this.entities = new Map();
     this.ballState = { x: 0, y: 0, vx: 0, vy: 0, r: 12 };
+
+    // Static Arena Cache key to prevent rebuilding background every frame
+    this.cachedArenaKey = null;
 
     if (this.isWebGL) {
       try {
@@ -53,14 +54,16 @@ export class GameRenderer {
     this.bgGraphics = new PIXI.Graphics();
     this.envGraphics = new PIXI.Graphics();
     this.pelletsGraphics = new PIXI.Graphics();
-    this.entitiesContainer = new PIXI.Container();
+    this.entitiesGraphics = new PIXI.Graphics();
+    this.entitiesTextContainer = new PIXI.Container();
     this.ballGraphics = new PIXI.Graphics();
     this.particlesGraphics = new PIXI.Graphics();
 
     this.world.addChild(this.bgGraphics);
     this.world.addChild(this.envGraphics);
     this.world.addChild(this.pelletsGraphics);
-    this.world.addChild(this.entitiesContainer);
+    this.world.addChild(this.entitiesGraphics);
+    this.world.addChild(this.entitiesTextContainer);
     this.world.addChild(this.ballGraphics);
     this.world.addChild(this.particlesGraphics);
 
@@ -76,6 +79,7 @@ export class GameRenderer {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.width = window.innerWidth;
     this.height = window.innerHeight;
+    this.cachedArenaKey = null; // force redraw on resize
 
     if (this.isWebGL && this.app) {
       this.app.renderer.resize(this.width, this.height);
@@ -86,10 +90,26 @@ export class GameRenderer {
   }
 
   // Frame-Rate Independent Camera Tracking
-  updateCamera(targetX, targetY, dt = 0.016) {
-    const camBlend = 1 - Math.exp(-9 * dt);
-    this.camera.x += (targetX - this.camera.x) * camBlend;
-    this.camera.y += (targetY - this.camera.y) * camBlend;
+  updateCamera(targetX, targetY, dt = 0.016, isFixedArena = false, arenaW = 1200, arenaH = 650) {
+    if (isFixedArena) {
+      // In Puck/Sumo mode: keep camera stable and centered on the pitch like Haxball (no jitter!)
+      const margin = 160;
+      const zoomX = this.width / (arenaW + margin * 2);
+      const zoomY = this.height / (arenaH + margin * 2);
+      const targetZoom = Math.min(zoomX, zoomY, 1.25);
+
+      const zoomBlend = 1 - Math.exp(-12 * dt);
+      const posBlend = 1 - Math.exp(-24 * dt);
+      this.camera.zoom += (targetZoom - this.camera.zoom) * zoomBlend;
+      this.camera.x += (0 - this.camera.x) * posBlend;
+      this.camera.y += (0 - this.camera.y) * posBlend;
+    } else {
+      // In Space/Agar mode: tightly follow player without slow laggy spring
+      const camBlend = 1 - Math.exp(-22 * dt);
+      this.camera.zoom = 1.0;
+      this.camera.x += (targetX - this.camera.x) * camBlend;
+      this.camera.y += (targetY - this.camera.y) * camBlend;
+    }
   }
 
   addKickSparks(x, y, color = '#38bdf8') {
@@ -138,8 +158,8 @@ export class GameRenderer {
   }
 
   render(gameState, myPlayerId, dt = 0.016) {
-    // 1. Delta-Time Smooth Exponential Spring Interpolation
-    const blend = 1 - Math.exp(-22 * dt);
+    // 1. Rock-Solid Delta-Time Exponential Interpolation (Zero Jitter)
+    const blend = 1 - Math.exp(-28 * dt);
 
     let myPlayer = null;
     if (gameState && gameState.players) {
@@ -149,13 +169,18 @@ export class GameRenderer {
           cached = { x: p.x, y: p.y, vx: p.vx || 0, vy: p.vy || 0, r: p.r || 18 };
           this.entities.set(p.id, cached);
         } else {
-          const vx = p.vx !== undefined ? p.vx : 0;
-          const vy = p.vy !== undefined ? p.vy : 0;
-          // Target with smooth latency prediction
-          const targetX = p.x + (vx * 0.3);
-          const targetY = p.y + (vy * 0.3);
-          cached.x += (targetX - cached.x) * blend;
-          cached.y += (targetY - cached.y) * blend;
+          // If distance is large (e.g. respawn/goal reset), snap instantly without flying
+          const dist = Math.hypot(p.x - cached.x, p.y - cached.y);
+          if (dist > 160) {
+            cached.x = p.x;
+            cached.y = p.y;
+          } else {
+            // Smooth direct lerp without artificial forward overshooting
+            cached.x += (p.x - cached.x) * blend;
+            cached.y += (p.y - cached.y) * blend;
+          }
+          cached.vx = p.vx || 0;
+          cached.vy = p.vy || 0;
           cached.r = p.r || 18;
         }
 
@@ -172,22 +197,30 @@ export class GameRenderer {
         this.ballState.x = b.x;
         this.ballState.y = b.y;
       } else {
-        const bvx = b.vx !== undefined ? b.vx : 0;
-        const bvy = b.vy !== undefined ? b.vy : 0;
-        const ballBlend = 1 - Math.exp(-24 * dt);
-        const ballTargetX = b.x + (bvx * 0.3);
-        const ballTargetY = b.y + (bvy * 0.3);
-        this.ballState.x += (ballTargetX - this.ballState.x) * ballBlend;
-        this.ballState.y += (ballTargetY - this.ballState.y) * ballBlend;
+        const ballDist = Math.hypot(b.x - this.ballState.x, b.y - this.ballState.y);
+        if (ballDist > 200) {
+          this.ballState.x = b.x;
+          this.ballState.y = b.y;
+        } else {
+          const ballBlend = 1 - Math.exp(-30 * dt);
+          this.ballState.x += (b.x - this.ballState.x) * ballBlend;
+          this.ballState.y += (b.y - this.ballState.y) * ballBlend;
+        }
       }
       this.ballState.r = b.r || 12;
     }
 
-    // 3. Camera Smooth Following
-    if (myPlayer) {
-      this.updateCamera(myPlayer.x, myPlayer.y, dt);
+    // 3. Camera Tracking
+    const isPuckOrSumo = gameState && (gameState.mode === 'puck' || gameState.mode === 'sumo');
+    const arenaW = (gameState && gameState.modeState && gameState.modeState.width) || 1200;
+    const arenaH = (gameState && gameState.modeState && gameState.modeState.height) || 650;
+
+    if (isPuckOrSumo) {
+      this.updateCamera(0, 0, dt, true, arenaW, arenaH);
+    } else if (myPlayer) {
+      this.updateCamera(myPlayer.x, myPlayer.y, dt, false);
     } else if (gameState && gameState.mode === 'puck' && gameState.modeState && gameState.modeState.ball) {
-      this.updateCamera(this.ballState.x, this.ballState.y, dt);
+      this.updateCamera(this.ballState.x, this.ballState.y, dt, true, arenaW, arenaH);
     }
 
     // Dispatch to WebGL or Canvas 2D
@@ -208,7 +241,6 @@ export class GameRenderer {
     this.world.scale.set(this.camera.zoom, this.camera.zoom);
     this.world.pivot.set(this.camera.x, this.camera.y);
 
-    this.bgGraphics.clear();
     this.envGraphics.clear();
     this.pelletsGraphics.clear();
     this.ballGraphics.clear();
@@ -216,39 +248,37 @@ export class GameRenderer {
 
     if (!gameState) return;
 
-    // Render Mode Arena via WebGL
+    // Cache static background rendering so stadium isn't reconstructed every frame
+    const arenaKey = `${gameState.mode}_${this.width}_${this.height}`;
+    if (this.cachedArenaKey !== arenaKey) {
+      this.cachedArenaKey = arenaKey;
+      this.bgGraphics.clear();
+      if (gameState.mode === 'puck') {
+        this.renderWebGLPuckPitchStatic(gameState.modeState);
+      } else if (gameState.mode === 'sumo') {
+        this.renderWebGLSumoRingStatic(gameState.modeState);
+      } else if (gameState.mode === 'agar') {
+        this.renderWebGLAgarArenaStatic(gameState.modeState);
+      } else if (gameState.mode === 'space') {
+        this.renderWebGLSpaceShipStatic(gameState.modeState);
+      }
+    }
+
+    // Dynamic environment layers
     if (gameState.mode === 'puck') {
-      this.renderWebGLPuckPitch(gameState.modeState);
-    } else if (gameState.mode === 'sumo') {
-      this.renderWebGLSumoRing(gameState.modeState);
+      this.renderWebGLPuckPitchDynamic(gameState.modeState);
     } else if (gameState.mode === 'agar') {
-      this.renderWebGLAgarArena(gameState.modeState);
+      this.renderWebGLAgarPellets(gameState.modeState);
     } else if (gameState.mode === 'space') {
-      this.renderWebGLSpaceShip(gameState.modeState);
+      this.renderWebGLSpaceShipDynamic(gameState.modeState);
     }
-
-    // Render WebGL Particles
-    this.renderWebGLParticles(dt);
-
-    // Render Entities
-    this.renderWebGLEntities(gameState, myPlayerId);
-
-    // Render Ball
-    if (gameState.mode === 'puck' && gameState.modeState && gameState.modeState.ball) {
-      this.renderWebGLBall(this.ballState);
-    }
-  }
-
-  renderWebGLPuckPitch(modeState) {
+  renderWebGLPuckPitchStatic(modeState) {
+    if (!modeState) return;
     const w = modeState.width || 1200;
     const h = modeState.height || 650;
     const hw = w / 2;
     const hh = h / 2;
-    const gh = (modeState.goalHeight || 160) / 2;
-    const gd = modeState.goalDepth || 90;
-
     const bg = this.bgGraphics;
-    const env = this.envGraphics;
 
     // 1. Outer Stadium Concrete Deck
     bg.beginFill(0x070b14);
@@ -262,12 +292,12 @@ export class GameRenderer {
     bg.drawRoundedRect(-hw - 80, -hh - 135, w + 160, tribuneH, 8);
     bg.endFill();
 
-    // Top Tribune Stadium Chairs (Koltuk Sıraları)
+    // Top Tribune Chairs
     const seatCols = Math.floor((w + 140) / 26);
     for (let r = 0; r < 3; r++) {
       const seatY = -hh - 120 + r * 28;
       for (let c = 0; c < seatCols; c++) {
-        if (c % 12 === 5 || c % 12 === 6) continue; // Aisle walkway gap
+        if (c % 12 === 5 || c % 12 === 6) continue;
         const seatX = -hw - 70 + c * 26;
         const chairColor = (c + r) % 2 === 0 ? 0x1e3a8a : 0x991b1b;
         bg.lineStyle(1, 0x334155, 0.7);
@@ -283,11 +313,10 @@ export class GameRenderer {
     bg.drawRoundedRect(-hw - 80, hh + 25, w + 160, tribuneH, 8);
     bg.endFill();
 
-    // Bottom Tribune Stadium Chairs
     for (let r = 0; r < 3; r++) {
       const seatY = hh + 40 + r * 28;
       for (let c = 0; c < seatCols; c++) {
-        if (c % 12 === 5 || c % 12 === 6) continue; // Aisle walkway gap
+        if (c % 12 === 5 || c % 12 === 6) continue;
         const seatX = -hw - 70 + c * 26;
         const chairColor = (c + r) % 2 === 0 ? 0x991b1b : 0x1e3a8a;
         bg.lineStyle(1, 0x334155, 0.7);
@@ -296,13 +325,6 @@ export class GameRenderer {
         bg.endFill();
       }
     }
-
-    // Glass Safety Railings (Tribün Cam Korkulukları)
-    env.lineStyle(3, 0x38bdf8, 0.7);
-    env.moveTo(-hw - 80, -hh - 22);
-    env.lineTo(hw + 80, -hh - 22);
-    env.moveTo(-hw - 80, hh + 22);
-    env.lineTo(hw + 80, hh + 22);
 
     // 4. Pitch Outer Turf Border
     bg.lineStyle(0);
@@ -318,8 +340,26 @@ export class GameRenderer {
       bg.drawRect(-hw + i * stripeW, -hh, stripeW, h);
       bg.endFill();
     }
+  }
 
-    // 6. White Pitch Boundary Lines
+  renderWebGLPuckPitchDynamic(modeState) {
+    if (!modeState) return;
+    const w = modeState.width || 1200;
+    const h = modeState.height || 650;
+    const hw = w / 2;
+    const hh = h / 2;
+    const gh = (modeState.goalHeight || 160) / 2;
+    const gd = modeState.goalDepth || 90;
+    const env = this.envGraphics;
+
+    // Glass Safety Railings
+    env.lineStyle(3, 0x38bdf8, 0.7);
+    env.moveTo(-hw - 80, -hh - 22);
+    env.lineTo(hw + 80, -hh - 22);
+    env.moveTo(-hw - 80, hh + 22);
+    env.lineTo(hw + 80, hh + 22);
+
+    // White Pitch Boundary Lines
     env.lineStyle(4, 0xffffff, 0.85);
     env.drawRect(-hw, -hh, w, h);
 
@@ -333,7 +373,7 @@ export class GameRenderer {
     env.drawCircle(0, 0, 4);
     env.endFill();
 
-    // Penalty Areas (Ceza Sahaları)
+    // Penalty Areas
     env.lineStyle(3, 0xffffff, 0.7);
     env.drawRect(-hw, -gh - 30, gd + 40, (gh + 30) * 2);
     env.drawRect(hw - gd - 40, -gh - 30, gd + 40, (gh + 30) * 2);
@@ -360,10 +400,9 @@ export class GameRenderer {
     }
   }
 
-  renderWebGLSumoRing(modeState) {
-    const ringRadius = modeState.ringRadius || 400;
+  renderWebGLSumoRingStatic(modeState) {
+    const ringRadius = (modeState && modeState.maxRadius) || 400;
     const bg = this.bgGraphics;
-    const env = this.envGraphics;
 
     // Void / Danger Floor
     bg.beginFill(0x1e111d);
@@ -379,25 +418,14 @@ export class GameRenderer {
     bg.beginFill(0x131c2e);
     bg.drawCircle(0, 0, ringRadius);
     bg.endFill();
-
-    // Border
-    env.lineStyle(5, 0xf43f5e, 1.0);
-    env.drawCircle(0, 0, ringRadius);
-
-    // Center Circle
-    env.lineStyle(3, 0xf43f5e, 0.3);
-    env.drawCircle(0, 0, 50);
   }
 
-  renderWebGLAgarArena(modeState) {
-    const w = modeState.width || 1800;
-    const h = modeState.height || 1200;
+  renderWebGLAgarArenaStatic(modeState) {
+    const w = (modeState && modeState.width) || 1800;
+    const h = (modeState && modeState.height) || 1200;
     const hw = w / 2;
     const hh = h / 2;
-
     const bg = this.bgGraphics;
-    const env = this.envGraphics;
-    const pellets = this.pelletsGraphics;
 
     // Arena Floor
     bg.beginFill(0x0a0f1d);
@@ -415,6 +443,16 @@ export class GameRenderer {
       bg.moveTo(-hw, y);
       bg.lineTo(hw, y);
     }
+  }
+
+  renderWebGLAgarPellets(modeState) {
+    if (!modeState) return;
+    const w = modeState.width || 1800;
+    const h = modeState.height || 1200;
+    const hw = w / 2;
+    const hh = h / 2;
+    const env = this.envGraphics;
+    const pellets = this.pelletsGraphics;
 
     // Border
     env.lineStyle(4, 0x38bdf8, 1.0);
@@ -422,6 +460,7 @@ export class GameRenderer {
 
     // Batch Pellets
     if (modeState.pellets) {
+      pellets.lineStyle(0);
       for (const p of modeState.pellets) {
         const hex = this.parseColorToHex(p.c);
         pellets.beginFill(hex, 0.95);
@@ -442,14 +481,13 @@ export class GameRenderer {
     }
   }
 
-  renderWebGLSpaceShip(modeState) {
+  renderWebGLSpaceShipStatic(modeState) {
+    if (!modeState) return;
     const w = modeState.width || 1800;
     const h = modeState.height || 1200;
     const hw = w / 2;
     const hh = h / 2;
-
     const bg = this.bgGraphics;
-    const env = this.envGraphics;
 
     // Deep Space
     bg.beginFill(0x050811);
@@ -477,6 +515,11 @@ export class GameRenderer {
         }
       }
     }
+  }
+
+  renderWebGLSpaceShipDynamic(modeState) {
+    if (!modeState) return;
+    const env = this.envGraphics;
 
     // Cafeteria Table
     env.lineStyle(3, 0x38bdf8, 1.0);
@@ -568,21 +611,25 @@ export class GameRenderer {
   }
 
   renderWebGLEntities(gameState, myPlayerId) {
-    this.entitiesContainer.removeChildren();
+    const g = this.entitiesGraphics;
+    g.clear();
 
     const entities = gameState.mode === 'agar' && gameState.modeState && gameState.modeState.cells
       ? gameState.modeState.cells
       : (gameState.players || []);
 
+    const activeIds = new Set();
+
     for (const p of entities) {
       if (p.isAlive === false) continue;
+      activeIds.add(p.id);
+
       const isSpectator = !!p.isSpectator;
       const cached = this.entities.get(p.id) || p;
       const isMe = p.id === myPlayerId || p.playerId === myPlayerId;
       const isVented = !!p.isVented;
       if (isVented && !isMe) continue;
 
-      const g = new PIXI.Graphics();
       const radius = isSpectator ? 16 : (p.r || 18);
       const hexColor = isSpectator ? 0x1e293b : this.parseColorToHex(p.color || (p.team === 'red' ? '#ef4444' : '#3b82f6'));
 
@@ -619,7 +666,7 @@ export class GameRenderer {
         g.endFill();
       }
 
-      // Text and Avatar Overlay via Pixi Text
+      // Text and Avatar Overlay via Pooled Pixi Text
       let textObj = this.textPool.get(p.id);
       const labelText = isSpectator
         ? `${isMe ? '👁️' : (p.avatar || '👁️')}\n${isMe ? '▼ TRİBÜNDESİN' : (p.name || 'İzleyici')}`
@@ -639,15 +686,25 @@ export class GameRenderer {
         });
         textObj.anchor.set(0.5, 0.5);
         this.textPool.set(p.id, textObj);
+        this.entitiesTextContainer.addChild(textObj);
       } else {
-        textObj.text = labelText;
+        if (textObj.text !== labelText) {
+          textObj.text = labelText;
+        }
         textObj.style.fill = isSpectator ? (isMe ? 0x38bdf8 : 0x94a3b8) : 0xffffff;
       }
       textObj.position.set(cached.x, cached.y - (radius > 25 ? 0 : 2));
       textObj.alpha = isVented ? 0.5 : 1.0;
+      textObj.visible = true;
+    }
 
-      this.entitiesContainer.addChild(g);
-      this.entitiesContainer.addChild(textObj);
+    // Clean up disconnected players' text objects
+    for (const [id, textObj] of this.textPool.entries()) {
+      if (!activeIds.has(id)) {
+        textObj.visible = false;
+        this.entitiesTextContainer.removeChild(textObj);
+        this.textPool.delete(id);
+      }
     }
   }
 
