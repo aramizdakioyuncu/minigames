@@ -1,9 +1,10 @@
 import { Vec2, resolveCircleCollision, resolveSegmentCollision } from '../physics.js';
 import { configDb } from '../../db/configDb.js';
+import { BaseMode } from './BaseMode.js';
 
-export class AgarMode {
+export class AgarMode extends BaseMode {
   constructor(room) {
-    this.room = room;
+    super(room);
     this.type = 'agar';
     this.name = 'Agar Bump & Feed';
 

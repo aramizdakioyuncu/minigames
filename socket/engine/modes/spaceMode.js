@@ -1,9 +1,10 @@
 import { Vec2, resolveCircleCollision, resolveSegmentCollision } from '../physics.js';
 import { configDb } from '../../db/configDb.js';
+import { BaseMode } from './BaseMode.js';
 
-export class SpaceMode {
+export class SpaceMode extends BaseMode {
   constructor(room) {
-    this.room = room;
+    super(room);
     this.type = 'space';
     this.name = 'Uzay Casusu (Spaceship Infiltration)';
 

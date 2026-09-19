@@ -1,9 +1,10 @@
 import { Vec2, PhysicsBody, resolveCircleCollision, resolveSegmentCollision } from '../physics.js';
 import { configDb } from '../../db/configDb.js';
+import { BaseMode } from './BaseMode.js';
 
-export class PuckMode {
+export class PuckMode extends BaseMode {
   constructor(room) {
-    this.room = room;
+    super(room);
     this.type = 'puck';
     this.name = 'Disk Futbolu Arena';
 

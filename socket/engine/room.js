@@ -1,8 +1,5 @@
 import { PhysicsBody } from './physics.js';
-import { PuckMode } from './modes/puckMode.js';
-import { SumoMode } from './modes/sumoMode.js';
-import { AgarMode } from './modes/agarMode.js';
-import { SpaceMode } from './modes/spaceMode.js';
+import { modeRegistry } from './modes/modeRegistry.js';
 
 export class Room {
   constructor(id, name, modeType = 'puck', options = {}) {
@@ -35,15 +32,7 @@ export class Room {
 
   initGameMode(modeType) {
     this.modeType = modeType;
-    if (modeType === 'sumo') {
-      this.mode = new SumoMode(this);
-    } else if (modeType === 'agar') {
-      this.mode = new AgarMode(this);
-    } else if (modeType === 'space') {
-      this.mode = new SpaceMode(this);
-    } else {
-      this.mode = new PuckMode(this);
-    }
+    this.mode = modeRegistry.createMode(modeType, this);
   }
 
   restartMatch(callerName = 'Host') {

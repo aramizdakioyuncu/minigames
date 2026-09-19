@@ -3,6 +3,7 @@ import { GameRenderer } from './renderer.js';
 import { InputController } from './input.js';
 import { audio } from './audio.js';
 import { UIController } from './ui.js';
+import { clientModeRegistry } from './modes/clientModeRegistry.js';
 
 class GameApp {
   constructor() {
@@ -406,27 +407,9 @@ class GameApp {
   }
 
   checkSpaceTaskInteraction() {
-    if (!this.lastGameState || this.lastGameState.mode !== 'space') return;
-    const s = this.lastGameState.modeState || {};
-    if (s.gameState === 'meeting') return;
-    if (this.ui.modalTaskInteractive && !this.ui.modalTaskInteractive.classList.contains('hidden')) return;
-
-    const myP = (this.lastGameState.players || []).find(p => p.id === this.socket.myPlayerId);
-    if (!myP) return;
-
-    const stations = s.taskStations || [];
-    const playerMeta = (s.playersMeta || []).find(p => p.id === this.socket.myPlayerId);
-    const completedList = (playerMeta && playerMeta.completedTasksList) || [];
-
-    for (const st of stations) {
-      if (completedList.includes(st.id)) continue;
-      const dist = Math.hypot(myP.x - st.x, myP.y - st.y);
-      if (dist <= 85) {
-        this.ui.openTaskMiniGame(st, (taskId) => {
-          this.socket.sendAction({ type: 'complete_task', taskId });
-        });
-        break;
-      }
+    const activeMode = clientModeRegistry.getActiveMode();
+    if (activeMode && activeMode.checkTaskInteraction) {
+      activeMode.checkTaskInteraction(this);
     }
   }
 
@@ -453,7 +436,7 @@ class GameApp {
       this.currentRoom = roomData;
       this.myCurrentRole = null;
       if (roomData && roomData.mode) {
-        this.ui.prepareGameHUD(roomData.mode);
+        this.ui.prepareGameHUD(roomData.mode, roomData);
       }
       this.ui.showView('view-game');
       this.ui.chatMessages.innerHTML = '';

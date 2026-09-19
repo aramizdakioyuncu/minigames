@@ -1,9 +1,10 @@
 import { Vec2, resolveCircleCollision } from '../physics.js';
 import { configDb } from '../../db/configDb.js';
+import { BaseMode } from './BaseMode.js';
 
-export class SumoMode {
+export class SumoMode extends BaseMode {
   constructor(room) {
-    this.room = room;
+    super(room);
     this.type = 'sumo';
     this.name = 'Sumo Knockout Arena';
 
