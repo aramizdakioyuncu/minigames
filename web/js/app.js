@@ -451,9 +451,15 @@ class GameApp {
     this.socket.on('onJoinedRoom', (roomData) => {
       this.currentRoom = roomData;
       this.myCurrentRole = null;
-      this.input.setChatting(false);
-      this.input.resetKeys();
-      if (document.activeElement && document.activeElement.blur) {
+      if (this.input) {
+        if (typeof this.input.setChatting === 'function') this.input.setChatting(false);
+        if (typeof this.input.resetKeys === 'function') {
+          this.input.resetKeys();
+        } else if (this.input.keys) {
+          Object.keys(this.input.keys).forEach(k => { this.input.keys[k] = false; });
+        }
+      }
+      if (document.activeElement && document.activeElement.blur && document.activeElement !== document.body) {
         document.activeElement.blur();
       }
       window.focus();

@@ -235,6 +235,10 @@ export class InputController {
     this.keys.use = false;
   }
 
+  reset() {
+    this.resetKeys();
+  }
+
   setChatting(active) {
     this.isChatting = active;
     if (active) {
