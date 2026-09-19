@@ -12,7 +12,7 @@ services:
     networks:
       - ball_net
 
-  # 2. Real-Time Game Physics & WebSocket Engine (Dahili Servis)
+  # 2. Real-Time Game Physics & WebSocket Engine (Doğrudan Host Portu & Minimum Gecikme)
   socket:
     build:
       context: ./socket
@@ -22,6 +22,8 @@ services:
       - PORT=${SOCKET_PORT:-5050}
     volumes:
       - socket_data:/app/data
+    ports:
+      - "${SOCKET_PORT:-5050}:${SOCKET_PORT:-5050}"
     expose:
       - "${SOCKET_PORT:-5050}"
     networks:
