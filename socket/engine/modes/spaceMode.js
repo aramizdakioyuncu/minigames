@@ -12,7 +12,7 @@ export class SpaceMode extends BaseMode {
     this.width = 1800;
     this.height = 1200;
 
-    this.gameState = 'playing'; // 'playing', 'meeting', 'game_over'
+    this.gameState = 'waiting'; // 'waiting' (Lobi Serbest Dolaşma), 'playing', 'meeting', 'game_over'
     this.meetingTimer = 0;
     this.meetingDuration = 30; // 30 seconds voting
     this.ejectedPlayer = null;
@@ -131,7 +131,9 @@ export class SpaceMode extends BaseMode {
     // Spawn at Cafeteria Table
     this.spawnAtCafeteria(player);
 
-    this.checkRolesDistribution();
+    if (this.gameState === 'playing') {
+      this.checkRolesDistribution();
+    }
   }
 
   spawnAtCafeteria(player) {
@@ -140,6 +142,35 @@ export class SpaceMode extends BaseMode {
     player.pos.set(Math.cos(angle) * dist, Math.sin(angle) * dist);
     player.vel.set(0, 0);
     player.isVented = false;
+  }
+
+  startMatch(callerName = 'Host') {
+    this.gameState = 'playing';
+    this.winner = null;
+    this.completedTasks = 0;
+    this.bodies = [];
+    this.votes.clear();
+    this.meetingReason = '';
+
+    const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
+    players.forEach(p => {
+      p.isAlive = true;
+      p.isVented = false;
+      p.ventId = null;
+      p.completedTasksList = [];
+      p.taskProgress = 0;
+      this.spawnAtCafeteria(p);
+    });
+
+    this.checkRolesDistribution();
+
+    this.room.broadcastEvent({
+      type: 'round_start',
+      caller: callerName,
+      message: '🚀 UZAY CASUSU BAŞLADI!'
+    });
+    this.room.broadcastEvent({ type: 'sfx_round_start' });
+    this.room.broadcastChat('Sistem', `🚀 Oyun ${callerName} tarafından başlatıldı! Hain aranızda...`, '#ef4444');
   }
 
   checkRolesDistribution() {
@@ -154,16 +185,12 @@ export class SpaceMode extends BaseMode {
     }
 
     const impostorCount = players.length >= 7 ? 2 : 1;
-    const currentImpostors = players.filter(p => p.role === 'impostor').length;
-
-    if (currentImpostors !== impostorCount) {
-      // Assign random Impostor
-      players.forEach(p => p.role = 'crew');
-      const shuffled = [...players].sort(() => Math.random() - 0.5);
-      for (let i = 0; i < impostorCount; i++) {
-        shuffled[i].role = 'impostor';
-        shuffled[i].lastKillTime = Date.now() + 5000; // 5s initial cooldown
-      }
+    // Assign random Impostor
+    players.forEach(p => p.role = 'crew');
+    const shuffled = [...players].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < impostorCount; i++) {
+      shuffled[i].role = 'impostor';
+      shuffled[i].lastKillTime = Date.now() + 5000; // 5s initial cooldown
     }
 
     this.calculateTaskTotal();
@@ -314,6 +341,13 @@ export class SpaceMode extends BaseMode {
 
   handleAction(playerId, actionData) {
     if (!actionData) return;
+
+    if (actionData.type === 'start_match' || actionData.type === 'start_game' || actionData.type === 'restart_match' || actionData.type === 'toggle_match') {
+      const player = this.room.players.get(playerId);
+      const callerName = player ? player.name : 'Host';
+      this.startMatch(callerName);
+      return;
+    }
 
     if (actionData.type === 'vote') {
       this.castVote(playerId, actionData.targetId);
@@ -509,7 +543,7 @@ export class SpaceMode extends BaseMode {
   }
 
   resetGame() {
-    this.gameState = 'playing';
+    this.gameState = 'waiting';
     this.winner = null;
     this.completedTasks = 0;
     this.bodies = [];
@@ -519,12 +553,15 @@ export class SpaceMode extends BaseMode {
     const players = Array.from(this.room.players.values());
     players.forEach(p => {
       p.isAlive = true;
+      p.isVented = false;
+      p.ventId = null;
+      p.role = 'crew';
       p.completedTasksList = [];
       p.taskProgress = 0;
       this.spawnAtCafeteria(p);
     });
 
-    this.checkRolesDistribution();
+    this.room.broadcastChat('Sistem', '🛸 Lobi moduna dönüldü. Gemide serbestçe dolaşabilir veya yeni oyunu başlatabilirsiniz.', '#38bdf8');
   }
 
   update(dt, secTimerTick) {

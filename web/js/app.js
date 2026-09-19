@@ -326,6 +326,18 @@ class GameApp {
       this.ui.btnEscResume.addEventListener('click', () => this.ui.toggleEscMenu(false));
     }
 
+    if (this.ui.btnHudStartMatch) {
+      this.ui.btnHudStartMatch.addEventListener('click', () => {
+        this.socket.sendAction({ type: 'start_match' });
+      });
+    }
+
+    if (this.ui.btnHudVoteMatch) {
+      this.ui.btnHudVoteMatch.addEventListener('click', () => {
+        this.socket.sendAction({ type: 'vote_start' });
+      });
+    }
+
     if (this.ui.btnHostToggleMatch) {
       this.ui.btnHostToggleMatch.addEventListener('click', () => {
         this.socket.sendAction({ type: 'toggle_match' });

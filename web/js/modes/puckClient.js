@@ -14,8 +14,8 @@ export class PuckClientMode extends BaseClientMode {
   getArenaDimensions(gameState) {
     const s = (gameState && gameState.modeState) || {};
     return {
-      width: s.width || 1200,
-      height: s.height || 650
+      width: (s.width || 1200) + 160,
+      height: (s.height || 650) + 260
     };
   }
 
@@ -42,9 +42,145 @@ export class PuckClientMode extends BaseClientMode {
     const goalD = s.goalDepth || 90;
     const goalH = s.goalHeight || 160;
 
-    // Grass Field Base
+    // 1. Stadium Concourse & Ground Base (Dark Outer Arena)
+    g.beginFill(0x0a0f1d);
+    g.drawRoundedRect(-hw - 80, -hh - 130, w + 160, h + 260, 24);
+    g.endFill();
+
+    // 2. TOP TRIBUNE (VIP & Seyirci Kuzey Tribünü)
+    // Concourse Floor Plate
+    g.beginFill(0x131d31);
+    g.drawRoundedRect(-hw - 35, -hh - 120, w + 70, 110, 12);
+    g.endFill();
+
+    // Seating Tier Lines
+    g.lineStyle(1.5, 0x1e293b, 1);
+    g.moveTo(-hw - 25, -hh - 90); g.lineTo(hw + 25, -hh - 90);
+    g.moveTo(-hw - 25, -hh - 60); g.lineTo(hw + 25, -hh - 60);
+    g.moveTo(-hw - 25, -hh - 30); g.lineTo(hw + 25, -hh - 30);
+
+    // Render Rows of Stadium Seats
+    const seatCols = 42;
+    const seatStep = (w + 40) / seatCols;
+    const seatColors = [0xdc2626, 0x2563eb, 0x0284c7, 0xf59e0b, 0x64748b];
+    for (let r = 0; r < 3; r++) {
+      const sy = -hh - 100 + r * 28;
+      for (let c = 0; c < seatCols; c++) {
+        const sx = -hw - 15 + c * seatStep;
+        // Skip dugout areas in bottom row
+        if (r === 2 && (Math.abs(sx - (-hw * 0.4)) < 80 || Math.abs(sx - (hw * 0.4)) < 80)) continue;
+        const color = seatColors[(r * 7 + c) % seatColors.length];
+        g.lineStyle(1, 0x000000, 0.6);
+        g.beginFill(color, 0.75);
+        g.drawRoundedRect(sx, sy, 14, 10, 2.5);
+        g.endFill();
+      }
+    }
+
+    // Top VIP Barrier Glass Railing
+    g.lineStyle(3, 0x38bdf8, 0.85);
+    g.moveTo(-hw - 30, -hh - 10);
+    g.lineTo(hw + 30, -hh - 10);
+    // Railing Glass Posts
+    g.lineStyle(1.5, 0x94a3b8, 0.8);
+    for (let x = -hw - 30; x <= hw + 30; x += 60) {
+      g.moveTo(x, -hh - 10);
+      g.lineTo(x, -hh);
+    }
+
+    // Top Tribune Center Badge / Banner Plate
+    g.lineStyle(2, 0x0284c7, 0.9);
+    g.beginFill(0x0c4a6e, 0.95);
+    g.drawRoundedRect(-170, -hh - 122, 340, 22, 6);
+    g.endFill();
+
+    // 3. BOTTOM TRIBUNE (Güney Tribünü & Seyirci Alanı)
+    // Concourse Floor Plate
+    g.beginFill(0x131d31);
+    g.drawRoundedRect(-hw - 35, hh + 10, w + 70, 110, 12);
+    g.endFill();
+
+    // Seating Tier Lines
+    g.lineStyle(1.5, 0x1e293b, 1);
+    g.moveTo(-hw - 25, hh + 40); g.lineTo(hw + 25, hh + 40);
+    g.moveTo(-hw - 25, hh + 70); g.lineTo(hw + 25, hh + 70);
+    g.moveTo(-hw - 25, hh + 100); g.lineTo(hw + 25, hh + 100);
+
+    // Render Rows of Stadium Seats
+    for (let r = 0; r < 3; r++) {
+      const sy = hh + 20 + r * 28;
+      for (let c = 0; c < seatCols; c++) {
+        const sx = -hw - 15 + c * seatStep;
+        const color = seatColors[(r * 5 + c * 3) % seatColors.length];
+        g.lineStyle(1, 0x000000, 0.6);
+        g.beginFill(color, 0.75);
+        g.drawRoundedRect(sx, sy, 14, 10, 2.5);
+        g.endFill();
+      }
+    }
+
+    // Bottom Tribune Barrier Glass Railing
+    g.lineStyle(3, 0x38bdf8, 0.85);
+    g.moveTo(-hw - 30, hh + 10);
+    g.lineTo(hw + 30, hh + 10);
+    // Railing Glass Posts
+    g.lineStyle(1.5, 0x94a3b8, 0.8);
+    for (let x = -hw - 30; x <= hw + 30; x += 60) {
+      g.moveTo(x, hh);
+      g.lineTo(x, hh + 10);
+    }
+
+    // Bottom Tribune Center Badge / Banner Plate
+    g.lineStyle(2, 0x0284c7, 0.9);
+    g.beginFill(0x0c4a6e, 0.95);
+    g.drawRoundedRect(-170, hh + 100, 340, 22, 6);
+    g.endFill();
+
+    // 4. Team Dugouts (Yedek Kulübeleri)
+    // Red Dugout
+    g.lineStyle(2, 0xef4444, 0.95);
+    g.beginFill(0x450a0a, 0.9);
+    g.drawRoundedRect(-hw * 0.4 - 70, -hh - 28, 140, 20, 5);
+    g.endFill();
+    // Blue Dugout
+    g.lineStyle(2, 0x3b82f6, 0.95);
+    g.beginFill(0x172554, 0.9);
+    g.drawRoundedRect(hw * 0.4 - 70, -hh - 28, 140, 20, 5);
+    g.endFill();
+
+    // 5. 4 Corner Stadium Floodlight Towers
+    const floodlights = [
+      { x: -hw - 60, y: -hh - 105 },
+      { x: hw + 60, y: -hh - 105 },
+      { x: -hw - 60, y: hh + 105 },
+      { x: hw + 60, y: hh + 105 }
+    ];
+    floodlights.forEach(fl => {
+      // Tower Pole Base
+      g.lineStyle(2, 0x475569, 1);
+      g.beginFill(0x1e293b, 1);
+      g.drawCircle(fl.x, fl.y, 14);
+      g.endFill();
+
+      // Glowing Spotlights
+      g.lineStyle(1, 0x38bdf8, 0.9);
+      g.beginFill(0xe0f2fe, 0.95);
+      g.drawCircle(fl.x - 5, fl.y - 5, 4);
+      g.drawCircle(fl.x + 5, fl.y - 5, 4);
+      g.drawCircle(fl.x - 5, fl.y + 5, 4);
+      g.drawCircle(fl.x + 5, fl.y + 5, 4);
+      g.endFill();
+
+      // Soft Light Glow
+      g.beginFill(0x38bdf8, 0.08);
+      g.drawCircle(fl.x, fl.y, 45);
+      g.endFill();
+    });
+
+    // 6. Grass Field Base
+    g.lineStyle(0);
     g.beginFill(0x134e2c);
-    g.drawRoundedRect(-hw - 30, -hh - 30, w + 60, h + 60, 24);
+    g.drawRoundedRect(-hw - 15, -hh - 10, w + 30, h + 20, 16);
     g.endFill();
 
     // Grass Stripes Pattern
@@ -58,38 +194,38 @@ export class PuckClientMode extends BaseClientMode {
       }
     }
 
-    // Outer Pitch Boundary Glow & Border
-    g.lineStyle(3, 0xffffff, 0.75);
-    g.drawRoundedRect(-hw, -hh, w, h, 16);
+    // Outer Pitch Boundary Line & Glow
+    g.lineStyle(3.5, 0xffffff, 0.9);
+    g.drawRoundedRect(-hw, -hh, w, h, 14);
 
     // Halfway Line
-    g.lineStyle(2, 0xffffff, 0.6);
+    g.lineStyle(2, 0xffffff, 0.7);
     g.moveTo(0, -hh);
     g.lineTo(0, hh);
 
     // Center Circle & Spot
     g.drawCircle(0, 0, 90);
-    g.beginFill(0xffffff, 0.8);
+    g.beginFill(0xffffff, 0.85);
     g.drawCircle(0, 0, 4);
     g.endFill();
 
     // Left Goal Net & Area
-    g.lineStyle(2, 0xf87171, 0.8);
+    g.lineStyle(2.5, 0xf87171, 0.9);
     g.drawRect(-hw - goalD, -goalH / 2, goalD, goalH);
-    g.lineStyle(2, 0xffffff, 0.5);
+    g.lineStyle(2, 0xffffff, 0.6);
     g.drawRect(-hw, -130, 110, 260); // Left Penalty Box
 
     // Right Goal Net & Area
-    g.lineStyle(2, 0x60a5fa, 0.8);
+    g.lineStyle(2.5, 0x60a5fa, 0.9);
     g.drawRect(hw, -goalH / 2, goalD, goalH);
-    g.lineStyle(2, 0xffffff, 0.5);
+    g.lineStyle(2, 0xffffff, 0.6);
     g.drawRect(hw - 110, -130, 110, 260); // Right Penalty Box
 
     // Goal Posts (Pylons)
     const postRadius = 6;
-    g.lineStyle(1, 0x1e293b, 1);
-    // Left posts
+    g.lineStyle(1.5, 0x0f172a, 1);
     g.beginFill(0xffffff);
+    // Left posts
     g.drawCircle(-hw, -goalH / 2, postRadius);
     g.drawCircle(-hw, goalH / 2, postRadius);
     // Right posts

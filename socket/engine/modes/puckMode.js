@@ -267,7 +267,7 @@ export class PuckMode extends BaseMode {
     }
 
     // Goal Detection
-    if (this.state === 'playing') {
+    if (this.celebrationTimer <= 0 && (this.matchPhase === 'first_half' || this.matchPhase === 'second_half' || this.matchPhase === 'waiting')) {
       this.checkGoal();
     }
   }
@@ -572,6 +572,7 @@ export class PuckMode extends BaseMode {
   }
 
   checkGoal() {
+    if (this.celebrationTimer > 0) return;
     const hw = this.width / 2;
     const gh = this.goalHeight / 2;
     const isSecondHalf = this.matchPhase === 'second_half';
@@ -592,6 +593,8 @@ export class PuckMode extends BaseMode {
         scoreRed: this.scoreRed,
         scoreBlue: this.scoreBlue
       });
+      this.room.broadcastEvent({ type: 'sfx_goal' });
+      this.room.broadcastEvent({ type: 'sfx_whistle' });
     }
     // Right Goal (In 1st half: Blue Goal -> Red Scores. In 2nd half: Red Goal -> Blue Scores)
     else if (this.ball.pos.x > hw + this.ball.radius && Math.abs(this.ball.pos.y) < gh) {
@@ -609,6 +612,8 @@ export class PuckMode extends BaseMode {
         scoreRed: this.scoreRed,
         scoreBlue: this.scoreBlue
       });
+      this.room.broadcastEvent({ type: 'sfx_goal' });
+      this.room.broadcastEvent({ type: 'sfx_whistle' });
     }
   }
 

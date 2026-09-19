@@ -308,10 +308,25 @@ export class GameRenderer {
           g.drawCircle(cached.x, cached.y, pulseRadius);
         }
       } else {
+        // Determine Team-Based Border & Indicator Colors
+        let borderColor = 0xffffff;
+        let pulseColor = 0xfacc15;
+
+        if (p.team === 'red') {
+          borderColor = isMe ? 0xff3344 : 0xef4444;
+          pulseColor = 0xff4d4d;
+        } else if (p.team === 'blue') {
+          borderColor = isMe ? 0x38bdf8 : 0x3b82f6;
+          pulseColor = 0x60a5fa;
+        } else if (isMe) {
+          borderColor = 0xfacc15;
+          pulseColor = 0xfacc15;
+        }
+
         // Pulse ring for self
         if (isMe) {
           const pulseRadius = radius + 6 + Math.sin(Date.now() / 300) * 3;
-          g.lineStyle(2.5, 0xfacc15, 0.9);
+          g.lineStyle(2.5, pulseColor, 0.95);
           g.drawCircle(cached.x, cached.y, pulseRadius);
         }
 
@@ -321,8 +336,8 @@ export class GameRenderer {
           g.drawCircle(cached.x, cached.y, radius + 8);
         }
 
-        // Player Disc Body
-        g.lineStyle(isMe ? 3.5 : 2, isMe ? 0xfacc15 : 0xffffff, 0.9);
+        // Player Disc Body (Border matches Red/Blue Team Color)
+        g.lineStyle(isMe ? 4.0 : 2.5, borderColor, 1.0);
         g.beginFill(hexColor, isVented ? 0.5 : 1.0);
         g.drawCircle(cached.x, cached.y, radius);
         g.endFill();
@@ -543,12 +558,31 @@ export class GameRenderer {
 
   renderCanvasPlayer(ctx, player, isMe) {
     const radius = player.r || 18;
+    let borderColor = isMe ? '#facc15' : '#ffffff';
+    let pulseColor = '#facc15';
+
+    if (player.team === 'red') {
+      borderColor = isMe ? '#ff3344' : '#ef4444';
+      pulseColor = '#ff4d4d';
+    } else if (player.team === 'blue') {
+      borderColor = isMe ? '#38bdf8' : '#3b82f6';
+      pulseColor = '#60a5fa';
+    }
+
+    if (isMe) {
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, radius + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = pulseColor;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
     ctx.beginPath();
     ctx.arc(player.x, player.y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = player.color || '#3b82f6';
+    ctx.fillStyle = player.color || (player.team === 'red' ? '#ef4444' : '#3b82f6');
     ctx.fill();
-    ctx.strokeStyle = isMe ? '#facc15' : '#ffffff';
-    ctx.lineWidth = isMe ? 3.5 : 2;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = isMe ? 4 : 2.5;
     ctx.stroke();
 
     ctx.font = `${Math.floor(radius * 0.95)}px sans-serif`;

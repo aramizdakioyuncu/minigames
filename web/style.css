@@ -1369,6 +1369,28 @@ input[type="text"]:focus, .select-styled:focus {
   box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
 }
 
+.space-role-lobby {
+  background: rgba(14, 165, 233, 0.25) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(14, 165, 233, 0.6) !important;
+  box-shadow: 0 0 15px rgba(14, 165, 233, 0.35);
+}
+
+.pulse-glow {
+  animation: pulseGlow 1.8s infinite alternate ease-in-out;
+}
+
+@keyframes pulseGlow {
+  0% {
+    box-shadow: 0 0 4px rgba(34, 197, 94, 0.4);
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 0 0 16px rgba(34, 197, 94, 0.9), 0 0 24px rgba(34, 197, 94, 0.4);
+    transform: scale(1.03);
+  }
+}
+
 /* Role Reveal Banner */
 .role-reveal-banner {
   position: absolute;

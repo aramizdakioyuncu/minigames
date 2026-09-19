@@ -118,6 +118,8 @@ export class UIController {
     this.labelTeamRed = document.getElementById('label-team-red');
     this.labelTeamBlue = document.getElementById('label-team-blue');
     this.btnHostToggleMatch = document.getElementById('btn-host-toggle-match');
+    this.btnHudStartMatch = document.getElementById('btn-hud-start-match');
+    this.btnHudVoteMatch = document.getElementById('btn-hud-vote-match');
 
     // Dynamic Hints & Mobile Buttons
     this.hintAction = document.getElementById('hint-action');
@@ -356,12 +358,12 @@ export class UIController {
     }
 
     if (gameState) {
-      const isHost = gameState.hostId === myPlayerId;
+      const isHost = !gameState.hostId || gameState.hostId === myPlayerId || (gameState.players && gameState.players.length <= 1);
       const hostPlayer = (gameState.players || []).find(p => p.id === gameState.hostId);
-      const isMatchActive = !!(gameState.modeState && gameState.modeState.isMatchActive);
+      const isMatchActive = !!(gameState.modeState && (gameState.modeState.isMatchActive || gameState.modeState.gameState === 'playing' || gameState.modeState.gameState === 'meeting'));
 
       if (this.escHostBadge) {
-        this.escHostBadge.textContent = `👑 Host: ${hostPlayer ? hostPlayer.name : 'Bilinmiyor'}${isHost ? ' (Sen)' : ''}`;
+        this.escHostBadge.textContent = `👑 Host: ${hostPlayer ? hostPlayer.name : (isHost ? 'Sen' : 'Bilinmiyor')}${isHost ? ' (Sen)' : ''}`;
       }
 
       // Host Start / Stop Toggle Button
@@ -369,10 +371,10 @@ export class UIController {
         this.btnHostToggleMatch.classList.toggle('hidden', !isHost);
         if (isHost) {
           if (isMatchActive) {
-            this.btnHostToggleMatch.textContent = '⏹️ Maçı Bitir (Host)';
+            this.btnHostToggleMatch.textContent = gameState.mode === 'space' ? '⏹️ Oyunu Bitir (Host)' : '⏹️ Maçı Bitir (Host)';
             this.btnHostToggleMatch.className = 'btn btn-danger btn-block';
           } else {
-            this.btnHostToggleMatch.textContent = '⚽ Maçı Başlat (Host)';
+            this.btnHostToggleMatch.textContent = gameState.mode === 'space' ? '🚀 Oyunu Başlat (Host)' : '⚽ Maçı Başlat (Host)';
             this.btnHostToggleMatch.className = 'btn btn-primary btn-block';
           }
         }
@@ -390,6 +392,67 @@ export class UIController {
         this.btnPlayerVoteRestart.innerHTML = `🗳️ ${voteLabel} <span id="esc-restart-vote-count">(${votes}/${needed})</span>`;
         this.escRestartVoteCount = document.getElementById('esc-restart-vote-count');
       }
+
+      // Also update top bar HUD match controls
+      this.updateHUDMatchControls(gameState, myPlayerId);
+    }
+  }
+
+  updateHUDMatchControls(gameState, myPlayerId) {
+    if (!gameState) return;
+    const isHost = !gameState.hostId || gameState.hostId === myPlayerId || (gameState.players && gameState.players.length <= 1);
+    const votes = gameState.restartVotesCount || 0;
+    const needed = gameState.restartVotesNeeded || 1;
+
+    if (gameState.mode === 'puck') {
+      const phase = (gameState.modeState && gameState.modeState.matchPhase) || 'waiting';
+      const isWaiting = phase === 'waiting' || phase === 'game_over';
+
+      if (isWaiting) {
+        if (isHost) {
+          if (this.btnHudStartMatch) {
+            this.btnHudStartMatch.textContent = '⚽ Maçı Başlat';
+            this.btnHudStartMatch.className = 'btn btn-success btn-sm pulse-glow';
+            this.btnHudStartMatch.classList.remove('hidden');
+          }
+          if (this.btnHudVoteMatch) this.btnHudVoteMatch.classList.add('hidden');
+        } else {
+          if (this.btnHudStartMatch) this.btnHudStartMatch.classList.add('hidden');
+          if (this.btnHudVoteMatch) {
+            this.btnHudVoteMatch.textContent = `🗳️ Başlatma Oyu (${votes}/${needed})`;
+            this.btnHudVoteMatch.classList.remove('hidden');
+          }
+        }
+      } else {
+        if (this.btnHudStartMatch) this.btnHudStartMatch.classList.add('hidden');
+        if (this.btnHudVoteMatch) this.btnHudVoteMatch.classList.add('hidden');
+      }
+    } else if (gameState.mode === 'space') {
+      const phase = (gameState.modeState && gameState.modeState.gameState) || 'waiting';
+      const isWaiting = phase === 'waiting' || phase === 'game_over';
+
+      if (isWaiting) {
+        if (isHost) {
+          if (this.btnHudStartMatch) {
+            this.btnHudStartMatch.textContent = '🚀 Oyunu Başlat';
+            this.btnHudStartMatch.className = 'btn btn-primary btn-sm pulse-glow';
+            this.btnHudStartMatch.classList.remove('hidden');
+          }
+          if (this.btnHudVoteMatch) this.btnHudVoteMatch.classList.add('hidden');
+        } else {
+          if (this.btnHudStartMatch) this.btnHudStartMatch.classList.add('hidden');
+          if (this.btnHudVoteMatch) {
+            this.btnHudVoteMatch.textContent = `🗳️ Başlatma Oyu (${votes}/${needed})`;
+            this.btnHudVoteMatch.classList.remove('hidden');
+          }
+        }
+      } else {
+        if (this.btnHudStartMatch) this.btnHudStartMatch.classList.add('hidden');
+        if (this.btnHudVoteMatch) this.btnHudVoteMatch.classList.add('hidden');
+      }
+    } else {
+      if (this.btnHudStartMatch) this.btnHudStartMatch.classList.add('hidden');
+      if (this.btnHudVoteMatch) this.btnHudVoteMatch.classList.add('hidden');
     }
   }
 

@@ -144,7 +144,8 @@ export class SpaceClientMode extends BaseClientMode {
 
     const s = gameState.modeState || {};
     const myPlayer = (gameState.players || []).find(p => p.id === myPlayerId);
-    const isImpostor = myPlayer && myPlayer.role === 'impostor';
+    const isLobby = s.gameState === 'waiting';
+    const isImpostor = !isLobby && myPlayer && myPlayer.role === 'impostor';
 
     // Update Task Bar
     const taskRatio = s.taskProgressRatio || 0;
@@ -153,7 +154,10 @@ export class SpaceClientMode extends BaseClientMode {
 
     // Update Role Badge
     if (ui.spaceRoleBadge) {
-      if (isImpostor) {
+      if (isLobby) {
+        ui.spaceRoleBadge.textContent = '🛸 LOBİ (Isınma & Serbest Gezinti)';
+        ui.spaceRoleBadge.className = 'space-role-pill space-role-lobby';
+      } else if (isImpostor) {
         ui.spaceRoleBadge.textContent = '🔪 CASUS (IMPOSTOR)';
         ui.spaceRoleBadge.className = 'space-role-pill space-role-impostor';
       } else {
@@ -163,7 +167,15 @@ export class SpaceClientMode extends BaseClientMode {
     }
 
     // Hints & Mobile Buttons
-    if (isImpostor) {
+    if (isLobby) {
+      if (ui.hintAction) ui.hintAction.innerHTML = '🛸 <b>Lobi:</b> Gemide serbestçe dolaşabilir, görevleri test edebilirsiniz.';
+      if (ui.hintHold) ui.hintHold.innerHTML = '⚡ <b>E / F:</b> Görevleri Dene';
+      if (ui.hintExtra) ui.hintExtra.classList.add('hidden');
+      if (ui.btnTouchAction) ui.btnTouchAction.textContent = '🛠️ TEST ET';
+      if (ui.btnTouchHold) ui.btnTouchHold.classList.add('hidden');
+      if (ui.btnTouchVent) ui.btnTouchVent.classList.add('hidden');
+      if (ui.btnTouchReport) ui.btnTouchReport.classList.add('hidden');
+    } else if (isImpostor) {
       if (ui.hintAction) ui.hintAction.innerHTML = '🔪 <b>Boşluk / Q:</b> Avla (Kill)';
       if (ui.hintHold) ui.hintHold.innerHTML = '🌀 <b>V:</b> Havalandırma (Vent)';
       if (ui.hintExtra) {

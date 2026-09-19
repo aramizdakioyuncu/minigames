@@ -123,14 +123,15 @@ export class Room {
     if (!player) return;
 
     if (actionData.type === 'restart_match') {
-      if (this.hostId === id) {
+      if (!this.hostId || this.hostId === id || this.players.size <= 1) {
         this.restartMatch(player.name);
       }
       return;
     }
 
-    if (actionData.type === 'start_match' || actionData.type === 'stop_match' || actionData.type === 'toggle_match') {
-      if (this.hostId === id && this.mode && this.mode.handleAction) {
+    if (actionData.type === 'start_match' || actionData.type === 'start_game' || actionData.type === 'stop_match' || actionData.type === 'toggle_match') {
+      const isHost = !this.hostId || this.hostId === id || this.players.size <= 1;
+      if (isHost && this.mode && this.mode.handleAction) {
         this.mode.handleAction(id, actionData);
       }
       return;
@@ -143,12 +144,12 @@ export class Room {
         this.restartVotes.add(id);
       }
       const neededVotes = Math.max(1, Math.ceil(this.players.size * 0.5));
-      this.broadcastChat('Oylama', `🗳️ ${player.name} maç oylaması yaptı (${this.restartVotes.size}/${neededVotes})`, '#facc15');
+      this.broadcastChat('Oylama', `🗳️ ${player.name} maç başlatma oylaması yaptı (${this.restartVotes.size}/${neededVotes})`, '#facc15');
       if (this.restartVotes.size >= neededVotes) {
         this.restartVotes.clear();
-        if (this.mode && this.mode.matchPhase === 'waiting' && this.mode.startMatch) {
+        if (this.mode && typeof this.mode.startMatch === 'function') {
           this.mode.startMatch('Oylama ile');
-        } else {
+        } else if (typeof this.restartMatch === 'function') {
           this.restartMatch('Oylama ile');
         }
       }
