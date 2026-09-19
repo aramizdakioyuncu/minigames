@@ -427,8 +427,8 @@ export class PuckMode {
 
   applyPlayerMovement(player, dt) {
     if (!player.input) return;
-    const accel = configDb.get('puck_player_accel') * (this.room.speedMultiplier || 1.35);
-    const maxSpeed = configDb.get('puck_player_max_speed') * (this.room.speedMultiplier || 1.35);
+    const accel = configDb.get('puck_player_accel') * (this.room.speedMultiplier || 1.0);
+    const maxSpeed = configDb.get('puck_player_max_speed') * (this.room.speedMultiplier || 1.0);
 
     let ax = 0;
     let ay = 0;
@@ -441,14 +441,6 @@ export class PuckMode {
     if (ax !== 0 && ay !== 0) {
       ax *= 0.7071;
       ay *= 0.7071;
-    }
-
-    // Counter-steering traction boost: If changing direction, give extra ground grip
-    if (ax !== 0 && Math.sign(ax) !== Math.sign(player.vel.x) && Math.abs(player.vel.x) > 0.5) {
-      player.vel.x *= 0.85; // Sharp responsive turn grip
-    }
-    if (ay !== 0 && Math.sign(ay) !== Math.sign(player.vel.y) && Math.abs(player.vel.y) > 0.5) {
-      player.vel.y *= 0.85; // Sharp responsive turn grip
     }
 
     player.vel.x += ax * accel;

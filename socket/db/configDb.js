@@ -8,13 +8,13 @@ const DB_FILE = path.join(DB_DIR, 'game_config.json');
 // Perfectly Balanced & Calibrated Classic Disk Futbolu (Puck) / Sumo / Agar Constants
 const DEFAULT_CONFIG = {
   // Disk Futbolu (Puck) Mode Settings
-  puck_player_accel: 0.95,       // Smooth, controlled acceleration (balanced)
-  puck_player_max_speed: 5.8,    // Calibrated top speed (~350px/sec)
-  puck_player_damping: 0.94,     // Natural grass friction
-  puck_kick_power: 14.0,         // Crisp, controlled kick impulse
+  puck_player_accel: 0.50,       // Progressive smooth acceleration
+  puck_player_max_speed: 5.5,    // Calibrated top speed
+  puck_player_damping: 0.968,    // Natural turf glide & drift inertia (does not stop dead)
+  puck_kick_power: 14.5,         // Controlled kick impulse
   puck_kick_range: 34,           // Reach radius for kick
-  puck_ball_damping: 0.986,      // Realistic turf glide
-  puck_ball_restitution: 0.85,   // Bounciness off posts and walls
+  puck_ball_damping: 0.990,      // Realistic gliding puck
+  puck_ball_restitution: 0.88,   // Bounciness off posts and walls
 
   // Sumo Mode Settings
   sumo_player_accel: 1.05,

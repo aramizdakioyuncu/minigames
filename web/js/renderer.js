@@ -87,7 +87,7 @@ export class GameRenderer {
 
   // Frame-Rate Independent Camera Tracking
   updateCamera(targetX, targetY, dt = 0.016) {
-    const camBlend = 1 - Math.exp(-12 * dt);
+    const camBlend = 1 - Math.exp(-9 * dt);
     this.camera.x += (targetX - this.camera.x) * camBlend;
     this.camera.y += (targetY - this.camera.y) * camBlend;
   }
@@ -138,9 +138,8 @@ export class GameRenderer {
   }
 
   render(gameState, myPlayerId, dt = 0.016) {
-    // 1. Delta-Time Smooth Entity Updates (Exponential Lerp & Velocity Extrapolation)
-    const blend = 1 - Math.exp(-24 * dt);
-    const advance = Math.min(dt * 60, 2.0);
+    // 1. Delta-Time Smooth Exponential Spring Interpolation
+    const blend = 1 - Math.exp(-22 * dt);
 
     let myPlayer = null;
     if (gameState && gameState.players) {
@@ -152,10 +151,11 @@ export class GameRenderer {
         } else {
           const vx = p.vx !== undefined ? p.vx : 0;
           const vy = p.vy !== undefined ? p.vy : 0;
-          cached.x += (vx * 0.7) * advance;
-          cached.y += (vy * 0.7) * advance;
-          cached.x += (p.x - cached.x) * blend;
-          cached.y += (p.y - cached.y) * blend;
+          // Target with smooth latency prediction
+          const targetX = p.x + (vx * 0.3);
+          const targetY = p.y + (vy * 0.3);
+          cached.x += (targetX - cached.x) * blend;
+          cached.y += (targetY - cached.y) * blend;
           cached.r = p.r || 18;
         }
 
@@ -174,10 +174,11 @@ export class GameRenderer {
       } else {
         const bvx = b.vx !== undefined ? b.vx : 0;
         const bvy = b.vy !== undefined ? b.vy : 0;
-        this.ballState.x += (bvx * 0.7) * advance;
-        this.ballState.y += (bvy * 0.7) * advance;
-        this.ballState.x += (b.x - this.ballState.x) * blend;
-        this.ballState.y += (b.y - this.ballState.y) * blend;
+        const ballBlend = 1 - Math.exp(-24 * dt);
+        const ballTargetX = b.x + (bvx * 0.3);
+        const ballTargetY = b.y + (bvy * 0.3);
+        this.ballState.x += (ballTargetX - this.ballState.x) * ballBlend;
+        this.ballState.y += (ballTargetY - this.ballState.y) * ballBlend;
       }
       this.ballState.r = b.r || 12;
     }
