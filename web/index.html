@@ -358,12 +358,134 @@
             </div>
           </div>
 
-          <div class="meeting-players-grid" id="meeting-players-grid">
-            <!-- Dynamic Player Voting Cards -->
+          <div class="meeting-body-row">
+            <!-- Left: Voting Grid -->
+            <div class="meeting-left-col">
+              <div class="meeting-players-grid" id="meeting-players-grid">
+                <!-- Dynamic Player Voting Cards -->
+              </div>
+              <div class="meeting-footer">
+                <button id="btn-skip-vote" class="btn btn-secondary">
+                  <span>Pas Geç (Oy Kullanma)</span>
+                  <span class="skip-count-badge" id="skip-vote-count">0</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Right: Meeting Live Discussion Chat -->
+            <div class="meeting-right-col">
+              <div class="meeting-chat-header">
+                💬 <b>Toplantı Tartışması</b>
+              </div>
+              <div class="meeting-chat-messages" id="meeting-chat-messages"></div>
+              <form class="meeting-chat-form" id="meeting-chat-form">
+                <input type="text" id="meeting-chat-input" placeholder="Şüpheliyi yaz ve tartış..." maxlength="80" autocomplete="off">
+                <button type="submit" class="btn btn-primary btn-sm">Gönder</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. CINEMATIC EJECTION OVERLAY -->
+      <div id="ejection-screen" class="ejection-screen hidden">
+        <div class="stars-backdrop"></div>
+        <div class="ejected-character-wrap" id="ejected-character-wrap">
+          <div class="ejected-avatar" id="ejected-avatar">⚽</div>
+        </div>
+        <div class="ejection-text-box">
+          <div class="ejection-title" id="ejection-title"></div>
+          <div class="ejection-subtitle" id="ejection-subtitle"></div>
+        </div>
+      </div>
+
+      <!-- 7. INTERACTIVE TASK MODAL -->
+      <div id="modal-task-interactive" class="modal-overlay hidden">
+        <div class="glass-card task-mini-card">
+          <div class="task-mini-header">
+            <div class="task-title-wrap">
+              <span id="task-mini-icon">⚡</span>
+              <h3 id="task-mini-title">Kabloları Onar</h3>
+            </div>
+            <button class="btn-close" id="btn-close-task">✕</button>
           </div>
 
-          <div class="meeting-footer">
-            <button id="btn-skip-vote" class="btn btn-secondary">Pas Geç (Oy Kullanma)</button>
+          <div class="task-mini-body">
+            <!-- Task 1: Wiring (Elektrik) -->
+            <div id="task-panel-wires" class="task-panel hidden">
+              <p class="task-instruction">Soldaki renkli kabloları sağdaki eşleşen renklere bağla!</p>
+              <div class="wiring-game-box" id="wiring-game-box">
+                <div class="wire-column wire-left" id="wire-left-col"></div>
+                <svg class="wire-svg" id="wire-svg"></svg>
+                <div class="wire-column wire-right" id="wire-right-col"></div>
+              </div>
+            </div>
+
+            <!-- Task 2: Shields (Kalkanlar) -->
+            <div id="task-panel-shields" class="task-panel hidden">
+              <p class="task-instruction">Kırmızı yanan arızalı kalkan heksagonlarına tıkla ve tüm kalkanları mavi yap!</p>
+              <div class="shields-game-box" id="shields-grid"></div>
+            </div>
+
+            <!-- Task 3: Bio-Scan (Revir) -->
+            <div id="task-panel-medscan" class="task-panel hidden">
+              <p class="task-instruction">Platforma çık ve biyometrik taramanın bitmesini bekle!</p>
+              <div class="medscan-visual-box">
+                <div class="scanner-pad">
+                  <div class="scan-beam"></div>
+                  <div class="scanner-avatar" id="medscan-avatar">👤</div>
+                </div>
+                <div class="medscan-data">
+                  <div class="medscan-status" id="medscan-status-text">Tarama Başlatılıyor...</div>
+                  <div class="medscan-bar-track">
+                    <div class="medscan-bar-fill" id="medscan-bar-fill"></div>
+                  </div>
+                  <div class="medscan-vitals">
+                    <span>❤️ Nabız: 78 BPM</span>
+                    <span>🩸 Kan Grubu: 0 Rh+</span>
+                    <span>⚖️ Kütle: 75 kg</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Task 4: Trash Chute (Kafeterya) -->
+            <div id="task-panel-trash" class="task-panel hidden">
+              <p class="task-instruction">Mekanik kolu aşağı çek ve atıklar boşalana kadar basılı tut!</p>
+              <div class="trash-game-box">
+                <div class="trash-chute-viewport">
+                  <div class="trash-particles-box" id="trash-particles">
+                    <span class="trash-item">🥫</span>
+                    <span class="trash-item">📦</span>
+                    <span class="trash-item">🍂</span>
+                    <span class="trash-item">📄</span>
+                    <span class="trash-item">🥤</span>
+                  </div>
+                </div>
+                <div class="trash-lever-track" id="trash-lever-track">
+                  <div class="trash-lever-handle" id="trash-lever-handle">⬇️ ÇEK</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Task 5: Reactor Sequence (Reaktör) -->
+            <div id="task-panel-reactor" class="task-panel hidden">
+              <p class="task-instruction">Reaktör düğmelerine 1'den 5'e kadar sırayla basarak soğutma sistemini aç!</p>
+              <div class="reactor-game-box">
+                <div class="reactor-display" id="reactor-seq-display">Sıra: 1 ➔ 2 ➔ 3 ➔ 4 ➔ 5</div>
+                <div class="reactor-pad-grid" id="reactor-pad-grid"></div>
+              </div>
+            </div>
+
+            <!-- Task 6: Navigation Steer (Kokpit) -->
+            <div id="task-panel-steer" class="task-panel hidden">
+              <p class="task-instruction">Gemi hedefini merkezdeki artı göstergesine tıkla ve rotayı kilitle!</p>
+              <div class="steer-radar-box" id="steer-radar-box">
+                <div class="radar-crosshair"></div>
+                <div class="radar-ship-target" id="radar-ship-target">🛸</div>
+                <div class="radar-status" id="radar-status">Hedef sapması: %35</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

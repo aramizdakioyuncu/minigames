@@ -239,15 +239,80 @@ class GameApp {
       });
     }
 
-    // Shortcut Enter to Chat
+    // Meeting Chat Form
+    if (this.ui.meetingChatForm) {
+      this.ui.meetingChatForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const text = this.ui.meetingChatInput.value.trim();
+        if (text.length > 0) {
+          this.socket.sendChat(text);
+          this.ui.meetingChatInput.value = '';
+        }
+        this.ui.meetingChatInput.blur();
+        this.input.setChatting(false);
+      });
+    }
+    if (this.ui.meetingChatInput) {
+      this.ui.meetingChatInput.addEventListener('focus', () => this.input.setChatting(true));
+      this.ui.meetingChatInput.addEventListener('blur', () => this.input.setChatting(false));
+    }
+
+    // Mobile Action Button space task trigger
+    const btnTouchAction = document.getElementById('btn-touch-action');
+    if (btnTouchAction) {
+      btnTouchAction.addEventListener('click', () => {
+        if (this.lastGameState && this.lastGameState.mode === 'space') {
+          this.checkSpaceTaskInteraction();
+        }
+      });
+    }
+
+    // Shortcut Enter to Chat / E or F for Task
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && this.ui.currentView === 'view-game') {
-        if (document.activeElement !== this.ui.chatInput) {
-          e.preventDefault();
-          this.ui.chatInput.focus();
+        const isMeetingOpen = this.ui.modalMeeting && !this.ui.modalMeeting.classList.contains('hidden');
+        if (isMeetingOpen) {
+          if (document.activeElement !== this.ui.meetingChatInput && this.ui.meetingChatInput) {
+            e.preventDefault();
+            this.ui.meetingChatInput.focus();
+          }
+        } else {
+          if (document.activeElement !== this.ui.chatInput) {
+            e.preventDefault();
+            this.ui.chatInput.focus();
+          }
+        }
+      } else if ((e.code === 'KeyE' || e.code === 'KeyF') && !this.input.isChatting) {
+        if (this.lastGameState && this.lastGameState.mode === 'space') {
+          this.checkSpaceTaskInteraction();
         }
       }
     });
+  }
+
+  checkSpaceTaskInteraction() {
+    if (!this.lastGameState || this.lastGameState.mode !== 'space') return;
+    const s = this.lastGameState.modeState || {};
+    if (s.gameState === 'meeting') return;
+    if (this.ui.modalTaskInteractive && !this.ui.modalTaskInteractive.classList.contains('hidden')) return;
+
+    const myP = (this.lastGameState.players || []).find(p => p.id === this.socket.myPlayerId);
+    if (!myP) return;
+
+    const stations = s.taskStations || [];
+    const playerMeta = (s.playersMeta || []).find(p => p.id === this.socket.myPlayerId);
+    const completedList = (playerMeta && playerMeta.completedTasksList) || [];
+
+    for (const st of stations) {
+      if (completedList.includes(st.id)) continue;
+      const dist = Math.hypot(myP.x - st.x, myP.y - st.y);
+      if (dist <= 65) {
+        this.ui.openTaskMiniGame(st, (taskId) => {
+          this.socket.sendAction({ type: 'complete_task', taskId });
+        });
+        break;
+      }
+    }
   }
 
   bindSocketEvents() {
@@ -277,6 +342,7 @@ class GameApp {
       }
       this.ui.showView('view-game');
       this.ui.chatMessages.innerHTML = '';
+      if (this.ui.meetingChatMessages) this.ui.meetingChatMessages.innerHTML = '';
       this.ui.addChatMessage('Sistem', `${roomData.roomName} odasına bağlandınız.`, '#38bdf8');
     });
 
@@ -346,10 +412,9 @@ class GameApp {
             this.ui.showGoalBanner('🚨 ACİL TOPLANTI!', `${evt.caller} toplantı başlattı!`);
           } else if (evt.type === 'meeting_result') {
             if (evt.ejected) {
-              this.ui.showGoalBanner('🗳️ OYLAMA SONUCU', `${evt.ejected} uzay boşluğuna fırlatıldı!`);
-            } else {
-              this.ui.showGoalBanner('🗳️ OYLAMA SONUCU', 'Kimse atılmadı (Berabere / Pas).');
+              audio.playEjection();
             }
+            this.ui.showEjectionScreen(evt.ejected, evt.isTie, evt.isSkip, evt.message);
           } else if (evt.type === 'game_over') {
             this.ui.showGoalBanner('🏆 OYUN BİTTİ!', evt.winner === 'impostor' ? '🚨 Casuslar Kazandı!' : '✨ Mürettebat Kazandı!');
           } else if (evt.type === 'goal') {
@@ -377,6 +442,7 @@ class GameApp {
 
     this.socket.on('onChat', (msg) => {
       this.ui.addChatMessage(msg.sender, msg.text, msg.color);
+      this.ui.addMeetingChatMessage(msg.sender, msg.text, msg.color);
     });
 
     this.socket.on('onPing', (pingMs) => {

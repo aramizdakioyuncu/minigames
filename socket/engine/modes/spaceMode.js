@@ -307,8 +307,49 @@ export class SpaceMode {
     }
   }
 
+  handleAction(playerId, actionData) {
+    if (!actionData) return;
+
+    if (actionData.type === 'vote') {
+      this.castVote(playerId, actionData.targetId);
+    } else if (actionData.type === 'complete_task') {
+      this.completeTask(playerId, actionData.taskId);
+    }
+  }
+
+  completeTask(playerId, taskId) {
+    const player = this.room.players.get(playerId);
+    if (!player || player.isSpectator) return;
+    if (this.gameState !== 'playing') return;
+
+    const station = this.taskStations.find(s => s.id === taskId);
+    if (!station) return;
+
+    if (!player.completedTasksList) {
+      player.completedTasksList = [];
+    }
+
+    if (!player.completedTasksList.includes(taskId)) {
+      player.completedTasksList.push(taskId);
+      this.completedTasks++;
+      player.taskProgress = 0;
+
+      this.room.broadcastEvent({
+        type: 'sfx_task_complete',
+        playerId: player.id,
+        playerName: player.name,
+        taskName: station.name,
+        x: station.x,
+        y: station.y
+      });
+
+      this.checkWinConditions();
+    }
+  }
+
   startEmergencyMeeting(reporterName, reason) {
     this.gameState = 'meeting';
+    this.meetingReason = reason;
     this.meetingTimer = this.meetingDuration;
     this.votes.clear();
     this.bodies = []; // Clear bodies
@@ -329,6 +370,9 @@ export class SpaceMode {
 
   castVote(voterId, targetId) {
     if (this.gameState !== 'meeting') return;
+    const voter = this.room.players.get(voterId);
+    if (!voter || !voter.isAlive || voter.isSpectator) return;
+
     this.votes.set(voterId, targetId);
 
     // Check if all alive players voted
@@ -364,25 +408,39 @@ export class SpaceMode {
       }
     }
 
-    let resultMsg = 'Oylama berabere sonuçlandı veya pas geçildi. Kimse atılmadı.';
+    let resultMsg = 'Kimse atılmadı (Berabere / Pas Geçildi).';
     let ejectedPlayer = null;
 
     if (!isTie && ejectedId && ejectedId !== 'skip') {
       const targetPlayer = this.room.players.get(ejectedId);
       if (targetPlayer) {
         targetPlayer.isAlive = false;
+        const allPlayers = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
+        const remainingImpostors = allPlayers.filter(p => p.isAlive && p.role === 'impostor').length;
+
         ejectedPlayer = {
+          id: targetPlayer.id,
           name: targetPlayer.name,
+          avatar: targetPlayer.avatar,
+          color: targetPlayer.color,
           role: targetPlayer.role,
-          wasImpostor: targetPlayer.role === 'impostor'
+          wasImpostor: targetPlayer.role === 'impostor',
+          impostorsLeft: remainingImpostors
         };
-        resultMsg = `${targetPlayer.name} uzay boşluğuna fırlatıldı! (${ejectedPlayer.wasImpostor ? 'BİR CASUSTU! 🔪' : 'Bir Mürettebattı 🛠️'})`;
+
+        if (ejectedPlayer.wasImpostor) {
+          resultMsg = `${targetPlayer.name} uzay boşluğuna fırlatıldı! BİR CASUSTU! 🔪 (${remainingImpostors} Casus Kaldı)`;
+        } else {
+          resultMsg = `${targetPlayer.name} uzay boşluğuna fırlatıldı! Bir Mürettebattı 🛠️ (${remainingImpostors} Casus Kaldı)`;
+        }
       }
     }
 
     this.room.broadcastEvent({
       type: 'meeting_result',
       ejected: ejectedPlayer,
+      isTie: isTie,
+      isSkip: ejectedId === 'skip',
       message: resultMsg
     });
 
@@ -443,6 +501,7 @@ export class SpaceMode {
     this.completedTasks = 0;
     this.bodies = [];
     this.votes.clear();
+    this.meetingReason = '';
 
     const players = Array.from(this.room.players.values());
     players.forEach(p => {
@@ -468,7 +527,7 @@ export class SpaceMode {
 
     for (let i = 0; i < playerList.length; i++) {
       const p1 = playerList[i];
-      if (p1.isSpectator || !p1.isAlive) continue;
+      if (p1.isSpectator) continue;
 
       this.handlePlayerInput(p1);
 
@@ -476,16 +535,18 @@ export class SpaceMode {
         this.applyPlayerMovement(p1, dt);
         p1.update(dt);
 
-        // Wall collisions
-        for (const wall of this.walls) {
-          resolveSegmentCollision(p1, wall.p1, wall.p2, 0.4);
-        }
+        // Wall collisions (only for alive players; dead players/ghosts can float through walls)
+        if (p1.isAlive) {
+          for (const wall of this.walls) {
+            resolveSegmentCollision(p1, wall.p1, wall.p2, 0.4);
+          }
 
-        // Collisions between players
-        for (let j = i + 1; j < playerList.length; j++) {
-          const p2 = playerList[j];
-          if (p2.isSpectator || !p2.isAlive || p2.isVented) continue;
-          resolveCircleCollision(p1, p2);
+          // Collisions between alive players
+          for (let j = i + 1; j < playerList.length; j++) {
+            const p2 = playerList[j];
+            if (p2.isSpectator || !p2.isAlive || p2.isVented) continue;
+            resolveCircleCollision(p1, p2);
+          }
         }
       }
     }
@@ -494,7 +555,7 @@ export class SpaceMode {
   applyPlayerMovement(player, dt) {
     if (!player.input) return;
     const accel = 1.05 * (this.room.speedMultiplier || 1.0);
-    const maxSpeed = 5.2 * (this.room.speedMultiplier || 1.0);
+    const maxSpeed = (player.isAlive ? 5.2 : 6.0) * (this.room.speedMultiplier || 1.0);
 
     let ax = 0;
     let ay = 0;
@@ -521,16 +582,21 @@ export class SpaceMode {
 
   getState() {
     const playerList = Array.from(this.room.players.values());
+    const skipCount = Array.from(this.votes.values()).filter(v => v === 'skip').length;
+    const aliveImpostors = playerList.filter(p => !p.isSpectator && p.role === 'impostor' && p.isAlive).length;
 
     return {
       mode: 'space',
       width: this.width,
       height: this.height,
       gameState: this.gameState,
+      meetingReason: this.meetingReason || 'Acil Durum Toplantısı',
       meetingTimer: Math.ceil(this.meetingTimer),
       totalTasks: this.totalTasks,
       completedTasks: this.completedTasks,
       taskProgressRatio: this.totalTasks > 0 ? Math.round((this.completedTasks / this.totalTasks) * 100) : 0,
+      skipVotesCount: skipCount,
+      impostorsLeft: aliveImpostors,
       bodies: this.bodies,
       rooms: this.roomsList,
       vents: this.vents,
@@ -543,7 +609,8 @@ export class SpaceMode {
         color: p.color,
         isAlive: p.isAlive,
         isVented: p.isVented,
-        role: p.role, // Filtered in client UI for own role / or shown to all in debug
+        role: p.role,
+        completedTasksList: p.completedTasksList || [],
         hasVoted: this.votes.has(p.id)
       }))
     };

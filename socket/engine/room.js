@@ -96,7 +96,9 @@ export class Room {
   }
 
   handlePlayerAction(id, actionData) {
-    if (this.mode && this.mode.castVote && actionData.type === 'vote') {
+    if (this.mode && this.mode.handleAction) {
+      this.mode.handleAction(id, actionData);
+    } else if (this.mode && this.mode.castVote && actionData.type === 'vote') {
       this.mode.castVote(id, actionData.targetId);
     }
   }
