@@ -140,16 +140,28 @@ export class Room {
       return;
     }
 
-    if (actionData.type === 'vote_restart') {
+    if (actionData.type === 'start_match' || actionData.type === 'stop_match' || actionData.type === 'toggle_match') {
+      if (this.hostId === id && this.mode && this.mode.handleAction) {
+        this.mode.handleAction(id, actionData);
+      }
+      return;
+    }
+
+    if (actionData.type === 'vote_restart' || actionData.type === 'vote_start') {
       if (this.restartVotes.has(id)) {
         this.restartVotes.delete(id);
       } else {
         this.restartVotes.add(id);
       }
-      const neededVotes = Math.max(1, Math.ceil(this.players.size * 0.6));
-      this.broadcastChat('Oylama', `🗳️ ${player.name} maçı yeniden başlatma oyu verdi (${this.restartVotes.size}/${neededVotes})`, '#facc15');
+      const neededVotes = Math.max(1, Math.ceil(this.players.size * 0.5));
+      this.broadcastChat('Oylama', `🗳️ ${player.name} maç oylaması yaptı (${this.restartVotes.size}/${neededVotes})`, '#facc15');
       if (this.restartVotes.size >= neededVotes) {
-        this.restartMatch('Oylama ile');
+        this.restartVotes.clear();
+        if (this.mode && this.mode.matchPhase === 'waiting' && this.mode.startMatch) {
+          this.mode.startMatch('Oylama ile');
+        } else {
+          this.restartMatch('Oylama ile');
+        }
       }
       return;
     }
@@ -163,22 +175,37 @@ export class Room {
 
   handleTeamChange(id, newTeam) {
     const player = this.players.get(id);
-    if (player && (newTeam === 'red' || newTeam === 'blue' || newTeam === 'spec')) {
-      if (newTeam === 'spec') {
-        player.isSpectator = true;
-        player.team = 'spec';
-        // Spawn player in Spectator Lounge (Tribün alanı)
-        player.pos.set((Math.random() - 0.5) * 500, -385);
-        player.vel.set(0, 0);
-        this.broadcastChat('Sistem', `${player.name} tribüne / izleyici alanına geçti 👁️`, '#94a3b8');
-      } else {
-        player.isSpectator = false;
-        player.team = newTeam;
-        if (this.mode.spawnPlayer) {
-          this.mode.spawnPlayer(player);
-        }
-        this.broadcastChat('Sistem', `${player.name} ${newTeam === 'red' ? '🔴 Kırmızı' : '🔵 Mavi'} takıma katıldı!`, newTeam === 'red' ? '#f87171' : '#60a5fa');
+    if (!player || !(newTeam === 'red' || newTeam === 'blue' || newTeam === 'spec')) return;
+
+    // Check if mode restricts team changes (e.g. Football match is active)
+    if (this.mode && typeof this.mode.canChangeTeam === 'function' && !this.mode.canChangeTeam(player)) {
+      if (player.ws && player.ws.readyState === 1) {
+        player.ws.send(JSON.stringify({
+          type: 'chat',
+          id: Math.random().toString(36).substring(2, 7),
+          sender: 'Hakem',
+          text: '⚠️ Maç devam ederken takım değiştiremezsiniz! (Devre arası veya maç sonunu bekleyin)',
+          color: '#ef4444',
+          time: Date.now()
+        }));
       }
+      return;
+    }
+
+    if (newTeam === 'spec') {
+      player.isSpectator = true;
+      player.team = 'spec';
+      // Spawn player in Spectator Lounge (Tribün alanı)
+      player.pos.set((Math.random() - 0.5) * 500, -385);
+      player.vel.set(0, 0);
+      this.broadcastChat('Sistem', `${player.name} tribüne / izleyici alanına geçti 👁️`, '#94a3b8');
+    } else {
+      player.isSpectator = false;
+      player.team = newTeam;
+      if (this.mode.spawnPlayer) {
+        this.mode.spawnPlayer(player);
+      }
+      this.broadcastChat('Sistem', `${player.name} ${newTeam === 'red' ? '🔴 Kırmızı' : '🔵 Mavi'} takıma katıldı!`, newTeam === 'red' ? '#f87171' : '#60a5fa');
     }
   }
 

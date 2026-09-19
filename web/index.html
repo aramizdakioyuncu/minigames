@@ -264,13 +264,16 @@
         <!-- Puck Soccer Scoreboard -->
         <div class="scoreboard-puck hidden" id="hud-puck">
           <div class="team-score team-red">
-            <span class="team-label">KIRMIZI</span>
+            <span class="team-label" id="label-team-red">KIRMIZI</span>
             <span class="score-num" id="score-red">0</span>
           </div>
-          <div class="match-time" id="match-timer">03:00</div>
+          <div class="match-time-wrapper">
+            <div class="match-time" id="match-timer">03:00</div>
+            <div class="puck-phase-badge" id="puck-phase-badge">1. DEVRE</div>
+          </div>
           <div class="team-score team-blue">
             <span class="score-num" id="score-blue">0</span>
-            <span class="team-label">MAVİ</span>
+            <span class="team-label" id="label-team-blue">MAVİ</span>
           </div>
         </div>
 
@@ -522,9 +525,14 @@
 
           <!-- Match Actions -->
           <div class="esc-actions-group">
+            <!-- Host Direct Start/Stop Match Button -->
+            <button id="btn-host-toggle-match" class="btn btn-primary btn-block hidden">
+              ⚽ Maçı Başlat (Host)
+            </button>
+
             <!-- Host Direct Restart Button -->
-            <button id="btn-host-restart" class="btn btn-primary btn-block hidden">
-              🔄 Maçı Yeniden Başlat (Host)
+            <button id="btn-host-restart" class="btn btn-secondary btn-block hidden">
+              🔄 Maçı Sıfırla (Host)
             </button>
 
             <!-- Player Vote Restart Button -->

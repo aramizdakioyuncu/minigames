@@ -309,6 +309,13 @@ class GameApp {
       this.ui.btnEscResume.addEventListener('click', () => this.ui.toggleEscMenu(false));
     }
 
+    if (this.ui.btnHostToggleMatch) {
+      this.ui.btnHostToggleMatch.addEventListener('click', () => {
+        this.socket.sendAction({ type: 'toggle_match' });
+        this.ui.toggleEscMenu(false);
+      });
+    }
+
     if (this.ui.btnHostRestart) {
       this.ui.btnHostRestart.addEventListener('click', () => {
         this.socket.sendAction({ type: 'restart_match' });
@@ -481,9 +488,30 @@ class GameApp {
       // Process Game Events (SFX, Announcements)
       if (state.events && state.events.length > 0) {
         state.events.forEach(evt => {
-          if (evt.type === 'match_restarted') {
-            audio.playTaskComplete();
-            this.ui.showGoalBanner('🔄 MAÇ YENİDEN BAŞLATILDI!', `Yeniden Başlatan: ${evt.caller || 'Host'}`);
+          if (evt.type === 'first_half_start') {
+            audio.playWhistle();
+            this.ui.showGoalBanner('⚽ MAÇ BAŞLADI!', evt.caller ? `${evt.caller} maçı başlattı` : '1. Devre Başladı!');
+            this.ui.addChatMessage('Hakem', 'Maç başladı! 1. Devre başladı.', '#22c55e');
+          } else if (evt.type === 'half_time') {
+            audio.playWhistle();
+            this.ui.showGoalBanner('⏸️ DEVRE ARASI!', 'Takımlar kaleleri değiştiriyor...');
+            this.ui.addChatMessage('Hakem', 'İlk yarı bitti! 10 saniye devre arası.', '#f59e0b');
+          } else if (evt.type === 'second_half_start') {
+            audio.playWhistle();
+            this.ui.showGoalBanner('⚽ 2. DEVRE BAŞLADI!', 'Kaleler ve yönler değişti!');
+            this.ui.addChatMessage('Hakem', '2. Devre başladı! Başarılar!', '#22c55e');
+          } else if (evt.type === 'match_stopped') {
+            audio.playWhistle();
+            this.ui.showGoalBanner('⏹️ MAÇ DURDURULDU', evt.caller ? `${evt.caller} maçı bitirdi` : 'Maç sona erdi.');
+            this.ui.addChatMessage('Hakem', 'Maç host tarafından bitirildi.', '#ef4444');
+          } else if (evt.type === 'match_ended') {
+            audio.playWhistle();
+            const winText = evt.winner === 'tie' ? '🤝 Berabere Bitti!' : (evt.winner === 'red' ? '🔴 Kırmızı Takım Kazandı!' : '🔵 Mavi Takım Kazandı!');
+            this.ui.showGoalBanner('🏆 MAÇ SONA ERDİ!', winText);
+            this.ui.addChatMessage('Hakem', `Maç süresi doldu! Sonuç: ${winText}`, '#38bdf8');
+          } else if (evt.type === 'match_restarted') {
+            audio.playWhistle();
+            this.ui.showGoalBanner('🔄 MAÇ SIFIRLANDI!', `Sıfırlayan: ${evt.caller || 'Host'}`);
           } else if (evt.type === 'sfx_kick') {
             audio.playKick();
             this.renderer.addKickSparks(evt.x, evt.y);

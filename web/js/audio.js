@@ -438,6 +438,43 @@ class SoundEngine {
       osc.stop(now + 2.5);
     } catch (e) {}
   }
+
+  // Football Mode: Referee Whistle Sound (Classic double-tone modulated trill)
+  playWhistle() {
+    if (this.muted || !this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(2400, now);
+      osc1.frequency.setValueAtTime(2550, now + 0.08);
+      osc1.frequency.setValueAtTime(2400, now + 0.16);
+      osc1.frequency.setValueAtTime(2600, now + 0.24);
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(2800, now);
+      osc2.frequency.setValueAtTime(2950, now + 0.08);
+      osc2.frequency.setValueAtTime(2800, now + 0.16);
+      osc2.frequency.setValueAtTime(3000, now + 0.24);
+
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.35, now + 0.04);
+      gain.gain.setValueAtTime(0.35, now + 0.35);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.45);
+      osc2.stop(now + 0.45);
+    } catch (e) {}
+  }
 }
 
 export const audio = new SoundEngine();

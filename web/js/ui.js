@@ -113,6 +113,10 @@ export class UIController {
     this.fpsDisplay = document.getElementById('fps-display');
     this.btnLeaveGame = document.getElementById('btn-leave-game');
     this.hudTeamSwitcher = document.getElementById('hud-team-switcher');
+    this.puckPhaseBadge = document.getElementById('puck-phase-badge');
+    this.labelTeamRed = document.getElementById('label-team-red');
+    this.labelTeamBlue = document.getElementById('label-team-blue');
+    this.btnHostToggleMatch = document.getElementById('btn-host-toggle-match');
 
     // Dynamic Hints & Mobile Buttons
     this.hintAction = document.getElementById('hint-action');
@@ -250,7 +254,14 @@ export class UIController {
       if (this.hudAgar) this.hudAgar.classList.add('hidden');
       if (this.hudSpace) this.hudSpace.classList.add('hidden');
       if (this.hudLeaderboard) this.hudLeaderboard.classList.add('hidden');
-      if (this.hudTeamSwitcher) this.hudTeamSwitcher.classList.remove('hidden');
+      const s = gameState.modeState || {};
+      const isMatchActive = !!s.isMatchActive;
+      const isHalfTime = !!s.isHalfTime;
+      const matchPhase = s.matchPhase || 'waiting';
+
+      if (this.hudTeamSwitcher) {
+        this.hudTeamSwitcher.classList.toggle('hidden', isMatchActive);
+      }
 
       const myP = (gameState.players || []).find(p => p.id === myPlayerId);
       const isSpec = myP ? !!myP.isSpectator : false;
@@ -264,11 +275,11 @@ export class UIController {
 
       // Show/Hide Floating Spectator Banner
       if (this.hudSpectatorBanner) {
-        this.hudSpectatorBanner.classList.toggle('hidden', !isSpec);
+        this.hudSpectatorBanner.classList.toggle('hidden', !isSpec || isMatchActive);
       }
 
       if (isSpec) {
-        if (this.hintAction) this.hintAction.innerHTML = '👁️ <b>İzleyici Modu:</b> Sahada oynamak için sol üstten veya alttan takım seç';
+        if (this.hintAction) this.hintAction.innerHTML = isMatchActive ? '👁️ <b>İzleyici Modu:</b> Maç oynanıyor, tribünden izliyorsun' : '👁️ <b>İzleyici Modu:</b> Sahada oynamak için sol üstten veya alttan takım seç';
         if (this.hintHold) this.hintHold.innerHTML = '🎮 <b>WASD:</b> Tribünde Gezin';
       } else {
         if (this.hintAction) this.hintAction.innerHTML = '⚡ <b>Boşluk / Sol Tık:</b> Şut & Pas';
@@ -280,9 +291,28 @@ export class UIController {
         this.btnTouchHold.classList.toggle('hidden', isSpec);
       }
 
-      const s = gameState.modeState || {};
       if (this.scoreRed) this.scoreRed.textContent = s.scoreRed !== undefined ? s.scoreRed : 0;
       if (this.scoreBlue) this.scoreBlue.textContent = s.scoreBlue !== undefined ? s.scoreBlue : 0;
+
+      // Phase badge handling
+      if (this.puckPhaseBadge) {
+        if (matchPhase === 'waiting') {
+          this.puckPhaseBadge.textContent = '⚽ ISINMA MODU';
+          this.puckPhaseBadge.className = 'puck-phase-badge';
+        } else if (matchPhase === 'first_half') {
+          this.puckPhaseBadge.textContent = '1. DEVRE';
+          this.puckPhaseBadge.className = 'puck-phase-badge';
+        } else if (matchPhase === 'half_time') {
+          this.puckPhaseBadge.textContent = `⏸️ DEVRE ARASI (${s.halfTimeTimer !== undefined ? s.halfTimeTimer : 10}s)`;
+          this.puckPhaseBadge.className = 'puck-phase-badge halftime';
+        } else if (matchPhase === 'second_half') {
+          this.puckPhaseBadge.textContent = '2. DEVRE';
+          this.puckPhaseBadge.className = 'puck-phase-badge';
+        } else if (matchPhase === 'game_over') {
+          this.puckPhaseBadge.textContent = '🏁 MAÇ BİTTİ';
+          this.puckPhaseBadge.className = 'puck-phase-badge gameover';
+        }
+      }
 
       const time = s.timeRemaining !== undefined ? s.timeRemaining : 0;
       const mins = Math.floor(time / 60).toString().padStart(2, '0');
@@ -388,9 +418,30 @@ export class UIController {
           this.modalMeeting.classList.remove('hidden');
           this.closeTaskMiniGame(); // Close task if meeting starts
         }
-        if (this.meetingTimerText) this.meetingTimerText.textContent = s.meetingTimer || 30;
+        if (this.meetingTimerText) this.meetingTimerText.textContent = s.meetingTimer !== undefined ? s.meetingTimer : 30;
         if (this.meetingReasonText && s.meetingReason) this.meetingReasonText.textContent = s.meetingReason;
         if (this.skipVoteCount) this.skipVoteCount.textContent = s.skipVotesCount || 0;
+        
+        const myPlayerMeta = (s.playersMeta || []).find(p => p.id === myPlayerId);
+        const iHaveVoted = myPlayerMeta ? myPlayerMeta.hasVoted : false;
+        const isMeDead = myPlayerMeta ? !myPlayerMeta.isAlive : false;
+
+        if (this.btnSkipVote) {
+          if (iHaveVoted) {
+            this.btnSkipVote.disabled = true;
+            this.btnSkipVote.classList.add('voted-disabled');
+            this.btnSkipVote.innerHTML = `<span>✓ Oyunu Kullandın</span> <span class="skip-count-badge" id="skip-vote-count">${s.skipVotesCount || 0}</span>`;
+          } else if (isMeDead) {
+            this.btnSkipVote.disabled = true;
+            this.btnSkipVote.classList.add('voted-disabled');
+            this.btnSkipVote.innerHTML = `<span>💀 Ölüler Oy Kullanamaz</span> <span class="skip-count-badge" id="skip-vote-count">${s.skipVotesCount || 0}</span>`;
+          } else {
+            this.btnSkipVote.disabled = false;
+            this.btnSkipVote.classList.remove('voted-disabled');
+            this.btnSkipVote.innerHTML = `<span>Pas Geç (Oy Kullanma)</span> <span class="skip-count-badge" id="skip-vote-count">${s.skipVotesCount || 0}</span>`;
+          }
+        }
+
         this.renderMeetingPlayers(s.playersMeta || [], myPlayerId);
       } else {
         if (this.modalMeeting) this.modalMeeting.classList.add('hidden');
@@ -404,22 +455,28 @@ export class UIController {
 
     const myPlayerMeta = players.find(p => p.id === myPlayerId);
     const iHaveVoted = myPlayerMeta ? myPlayerMeta.hasVoted : false;
+    const isMeDead = myPlayerMeta ? !myPlayerMeta.isAlive : false;
 
     players.forEach(p => {
       const isDead = !p.isAlive;
       const isMe = p.id === myPlayerId;
       const card = document.createElement('div');
-      card.className = `meeting-player-card ${isDead ? 'meeting-player-dead' : ''}`;
+      card.className = `meeting-player-card ${isDead ? 'meeting-player-dead' : ''} ${isMe ? 'meeting-player-me' : ''}`;
       
-      const votedBadge = p.hasVoted ? `<span class="voted-check-badge">✓ Oy Verdi</span>` : '';
-      const voteBtn = (!isDead && !isMe && !iHaveVoted) ? `<button class="btn-vote" data-id="${p.id}">Oy Ver 🗳️</button>` : '';
+      const votedBadge = p.hasVoted ? `<span class="voted-check-badge">✓ Oy Verdi</span>` : `<span class="voted-waiting-badge">⏳ Düşünüyor</span>`;
+      const voteBtn = (!isDead && !isMe && !iHaveVoted && !isMeDead) ? `<button class="btn-vote" data-id="${p.id}">🗳️ OY VER</button>` : '';
 
       card.innerHTML = `
-        <span class="meeting-avatar">${p.avatar || '👤'}</span>
-        <span class="meeting-name" style="color: ${p.color || '#fff'}">${this.escapeHtml(p.name)}${isMe ? ' (Sen)' : ''}</span>
-        ${votedBadge}
-        ${voteBtn}
-        ${isDead ? '<span style="font-size: 10px; color: #ef4444;">💀 Elendi</span>' : ''}
+        <div class="meeting-card-left">
+          <span class="meeting-avatar">${p.avatar || '👤'}</span>
+          <div class="meeting-player-details">
+            <span class="meeting-name" style="color: ${p.color || '#fff'}">${this.escapeHtml(p.name)}${isMe ? ' (Sen)' : ''}</span>
+            ${isDead ? '<span class="dead-status-tag">💀 Elendi</span>' : votedBadge}
+          </div>
+        </div>
+        <div class="meeting-card-right">
+          ${voteBtn}
+        </div>
       `;
       this.meetingPlayersGrid.appendChild(card);
     });
@@ -493,9 +550,24 @@ export class UIController {
     if (gameState) {
       const isHost = gameState.hostId === myPlayerId;
       const hostPlayer = (gameState.players || []).find(p => p.id === gameState.hostId);
+      const isMatchActive = !!(gameState.modeState && gameState.modeState.isMatchActive);
 
       if (this.escHostBadge) {
         this.escHostBadge.textContent = `👑 Host: ${hostPlayer ? hostPlayer.name : 'Bilinmiyor'}${isHost ? ' (Sen)' : ''}`;
+      }
+
+      // Host Start / Stop Toggle Button
+      if (this.btnHostToggleMatch) {
+        this.btnHostToggleMatch.classList.toggle('hidden', !isHost);
+        if (isHost) {
+          if (isMatchActive) {
+            this.btnHostToggleMatch.textContent = '⏹️ Maçı Bitir (Host)';
+            this.btnHostToggleMatch.className = 'btn btn-danger btn-block';
+          } else {
+            this.btnHostToggleMatch.textContent = '⚽ Maçı Başlat (Host)';
+            this.btnHostToggleMatch.className = 'btn btn-primary btn-block';
+          }
+        }
       }
 
       if (this.btnHostRestart) {
@@ -506,9 +578,9 @@ export class UIController {
         this.btnPlayerVoteRestart.classList.toggle('hidden', isHost);
         const votes = gameState.restartVotesCount || 0;
         const needed = gameState.restartVotesNeeded || 1;
-        if (this.escRestartVoteCount) {
-          this.escRestartVoteCount.textContent = `(${votes}/${needed})`;
-        }
+        const voteLabel = isMatchActive ? 'Maçı Yeniden Başlatma Oyu Ver' : 'Maçı Başlatma Oyu Ver';
+        this.btnPlayerVoteRestart.innerHTML = `🗳️ ${voteLabel} <span id="esc-restart-vote-count">(${votes}/${needed})</span>`;
+        this.escRestartVoteCount = document.getElementById('esc-restart-vote-count');
       }
     }
   }

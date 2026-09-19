@@ -15,8 +15,12 @@ export class PuckMode {
 
     this.scoreRed = 0;
     this.scoreBlue = 0;
-    this.timeRemaining = 180; // 3 minutes match
-    this.state = 'playing'; // 'playing', 'goal_celebration', 'game_over'
+    this.halfDuration = Math.max(30, Math.floor((this.room.matchDuration || 180) / 2)); // e.g. 90s per half
+    this.timeRemaining = this.halfDuration;
+    
+    // Match phases: 'waiting' (Isınma), 'first_half', 'half_time' (Devre arası), 'second_half', 'game_over'
+    this.matchPhase = 'waiting';
+    this.halfTimeTimer = 10;
     this.celebrationTimer = 0;
     this.lastScorer = null;
     this.lastScorerTeam = null;
@@ -33,10 +37,10 @@ export class PuckMode {
 
     // Static Goal Posts (discs for smooth bounce)
     this.posts = [
-      // Left Goal Posts (Red goal)
+      // Left Goal Posts
       new PhysicsBody({ id: 'post_tl', x: -hw, y: -gh, radius: 8, mass: 0, isStatic: true, type: 'post' }),
       new PhysicsBody({ id: 'post_bl', x: -hw, y: gh, radius: 8, mass: 0, isStatic: true, type: 'post' }),
-      // Right Goal Posts (Blue goal)
+      // Right Goal Posts
       new PhysicsBody({ id: 'post_tr', x: hw, y: -gh, radius: 8, mass: 0, isStatic: true, type: 'post' }),
       new PhysicsBody({ id: 'post_br', x: hw, y: gh, radius: 8, mass: 0, isStatic: true, type: 'post' })
     ];
@@ -100,9 +104,19 @@ export class PuckMode {
     this.spawnPlayer(player);
   }
 
+  canChangeTeam() {
+    return this.matchPhase === 'waiting' || this.matchPhase === 'game_over';
+  }
+
   spawnPlayer(player) {
     const hw = this.width / 2;
-    const offsetX = player.team === 'red' ? -hw * 0.45 : hw * 0.45;
+    const isSecondHalf = this.matchPhase === 'second_half';
+    // In 1st half & waiting: Red is on Left (-X), Blue is on Right (+X)
+    // In 2nd half: Red is on Right (+X), Blue is on Left (-X) (sides swap!)
+    let isLeftSide = player.team === 'red';
+    if (isSecondHalf) isLeftSide = !isLeftSide;
+
+    const offsetX = isLeftSide ? -hw * 0.45 : hw * 0.45;
     const randY = (Math.random() - 0.5) * 200;
     player.pos.set(offsetX, randY);
     player.vel.set(0, 0);
@@ -113,31 +127,133 @@ export class PuckMode {
     this.ball.vel.set(0, 0);
 
     for (const player of this.room.players.values()) {
-      this.spawnPlayer(player);
+      if (!player.isSpectator) {
+        this.spawnPlayer(player);
+      }
+    }
+  }
+
+  startMatch(callerName = 'Host') {
+    this.matchPhase = 'first_half';
+    this.scoreRed = 0;
+    this.scoreBlue = 0;
+    this.timeRemaining = this.halfDuration;
+    this.celebrationTimer = 0;
+    this.resetPositions();
+
+    this.room.broadcastEvent({
+      type: 'first_half_start',
+      caller: callerName,
+      message: '⚽ 1. YARI BAŞLADI!'
+    });
+    this.room.broadcastEvent({ type: 'sfx_whistle' });
+    this.room.broadcastChat('Hakem', `⚽ 1. Yarı Başladı! (${callerName}) - Takım değişiklikleri kilitlendi.`, '#10b981');
+  }
+
+  stopMatch(callerName = 'Host') {
+    this.matchPhase = 'waiting';
+    this.timeRemaining = this.halfDuration;
+    this.scoreRed = 0;
+    this.scoreBlue = 0;
+    this.celebrationTimer = 0;
+    this.resetPositions();
+
+    this.room.broadcastEvent({
+      type: 'match_stopped',
+      caller: callerName,
+      message: '⏹️ MAÇ BİTİRİLDİ (Isınma Modu)'
+    });
+    this.room.broadcastEvent({ type: 'sfx_whistle' });
+    this.room.broadcastChat('Hakem', `⏹️ Maç ${callerName} tarafından bitirildi. Isınma modu aktif.`, '#f59e0b');
+  }
+
+  handleAction(playerId, actionData) {
+    if (!actionData) return;
+    const player = this.room.players.get(playerId);
+    const callerName = player ? player.name : 'Host';
+
+    if (actionData.type === 'start_match') {
+      this.startMatch(callerName);
+    } else if (actionData.type === 'stop_match') {
+      this.stopMatch(callerName);
+    } else if (actionData.type === 'toggle_match') {
+      if (this.matchPhase === 'waiting' || this.matchPhase === 'game_over') {
+        this.startMatch(callerName);
+      } else {
+        this.stopMatch(callerName);
+      }
     }
   }
 
   update(dt, secTimerTick) {
-    if (secTimerTick && this.state === 'playing') {
-      if (this.timeRemaining > 0) {
-        this.timeRemaining--;
-      } else {
-        this.state = 'game_over';
-        this.room.broadcastEvent({
-          type: 'game_over',
-          winner: this.scoreRed > this.scoreBlue ? 'red' : (this.scoreBlue > this.scoreRed ? 'blue' : 'draw'),
-          scoreRed: this.scoreRed,
-          scoreBlue: this.scoreBlue
-        });
+    if (secTimerTick) {
+      if (this.matchPhase === 'first_half') {
+        if (this.timeRemaining > 0) {
+          this.timeRemaining--;
+        } else {
+          // Enter Half-Time!
+          this.matchPhase = 'half_time';
+          this.halfTimeTimer = 10;
+          this.resetPositions();
+          this.room.broadcastEvent({
+            type: 'half_time',
+            message: '⏸️ DEVRE ARASI! (Kaleler Değişiyor)'
+          });
+          this.room.broadcastEvent({ type: 'sfx_whistle' });
+          this.room.broadcastChat('Hakem', '⏸️ İlk yarı bitti! Devre Arası (10sn) - Takımlar kale değiştiriyor.', '#facc15');
+        }
+      } else if (this.matchPhase === 'half_time') {
+        if (this.halfTimeTimer > 0) {
+          this.halfTimeTimer--;
+        } else {
+          // Start 2nd Half!
+          this.matchPhase = 'second_half';
+          this.timeRemaining = this.halfDuration;
+          this.resetPositions();
+          this.room.broadcastEvent({
+            type: 'second_half_start',
+            message: '⚽ 2. YARI BAŞLADI!'
+          });
+          this.room.broadcastEvent({ type: 'sfx_whistle' });
+          this.room.broadcastChat('Hakem', '⚽ 2. Yarı Başladı! Başarılar.', '#10b981');
+        }
+      } else if (this.matchPhase === 'second_half') {
+        if (this.timeRemaining > 0) {
+          this.timeRemaining--;
+        } else {
+          // Match Finished
+          this.matchPhase = 'game_over';
+          const winner = this.scoreRed > this.scoreBlue ? 'red' : (this.scoreBlue > this.scoreRed ? 'blue' : 'draw');
+          this.room.broadcastEvent({
+            type: 'game_over',
+            winner,
+            scoreRed: this.scoreRed,
+            scoreBlue: this.scoreBlue,
+            message: winner === 'draw' ? '🤝 MAÇ BİTTİ: BERABERE!' : `🏆 MAÇ BİTTİ: ${winner === 'red' ? 'KIRMIZI' : 'MAVİ'} TAKIM KAZANDI!`
+          });
+          this.room.broadcastEvent({ type: 'sfx_whistle' });
+          this.room.broadcastChat('Hakem', `🏆 Maç Sona Erdi! Skor: Kırmızı ${this.scoreRed} - ${this.scoreBlue} Mavi`, '#38bdf8');
+          
+          setTimeout(() => {
+            if (this.matchPhase === 'game_over') {
+              this.matchPhase = 'waiting';
+              this.timeRemaining = this.halfDuration;
+              this.scoreRed = 0;
+              this.scoreBlue = 0;
+              this.resetPositions();
+              this.room.broadcastChat('Hakem', '⚽ Yeni maç için hazırlık (Isınma modu).', '#94a3b8');
+            }
+          }, 8000);
+        }
       }
     }
 
-    if (this.state === 'goal_celebration') {
+    if (this.celebrationTimer > 0) {
       this.celebrationTimer -= dt;
       if (this.celebrationTimer <= 0) {
-        this.state = 'playing';
         this.resetPositions();
         this.room.broadcastEvent({ type: 'kickoff' });
+        this.room.broadcastEvent({ type: 'sfx_whistle' });
       }
     }
 
@@ -457,29 +573,38 @@ export class PuckMode {
   checkGoal() {
     const hw = this.width / 2;
     const gh = this.goalHeight / 2;
+    const isSecondHalf = this.matchPhase === 'second_half';
 
-    // Left Goal (Scored by Blue team)
+    // Left Goal (In 1st half: Red Goal -> Blue Scores. In 2nd half: Blue Goal -> Red Scores)
     if (this.ball.pos.x < -hw - this.ball.radius && Math.abs(this.ball.pos.y) < gh) {
-      this.scoreBlue++;
-      this.state = 'goal_celebration';
-      this.celebrationTimer = 3.0;
+      const scoringTeam = isSecondHalf ? 'red' : 'blue';
+      if (scoringTeam === 'red') {
+        this.scoreRed++;
+      } else {
+        this.scoreBlue++;
+      }
+      this.celebrationTimer = 2.5;
       this.room.broadcastEvent({
         type: 'goal',
-        team: 'blue',
-        scorer: this.lastScorer || 'Blue Team',
+        team: scoringTeam,
+        scorer: this.lastScorer || (scoringTeam === 'red' ? 'Kırmızı Takım' : 'Mavi Takım'),
         scoreRed: this.scoreRed,
         scoreBlue: this.scoreBlue
       });
     }
-    // Right Goal (Scored by Red team)
+    // Right Goal (In 1st half: Blue Goal -> Red Scores. In 2nd half: Red Goal -> Blue Scores)
     else if (this.ball.pos.x > hw + this.ball.radius && Math.abs(this.ball.pos.y) < gh) {
-      this.scoreRed++;
-      this.state = 'goal_celebration';
-      this.celebrationTimer = 3.0;
+      const scoringTeam = isSecondHalf ? 'blue' : 'red';
+      if (scoringTeam === 'red') {
+        this.scoreRed++;
+      } else {
+        this.scoreBlue++;
+      }
+      this.celebrationTimer = 2.5;
       this.room.broadcastEvent({
         type: 'goal',
-        team: 'red',
-        scorer: this.lastScorer || 'Red Team',
+        team: scoringTeam,
+        scorer: this.lastScorer || (scoringTeam === 'red' ? 'Kırmızı Takım' : 'Mavi Takım'),
         scoreRed: this.scoreRed,
         scoreBlue: this.scoreBlue
       });
@@ -487,6 +612,7 @@ export class PuckMode {
   }
 
   getState() {
+    const timeDisplay = this.matchPhase === 'half_time' ? this.halfTimeTimer : this.timeRemaining;
     return {
       mode: 'puck',
       width: this.width,
@@ -495,8 +621,12 @@ export class PuckMode {
       goalDepth: this.goalDepth,
       scoreRed: this.scoreRed,
       scoreBlue: this.scoreBlue,
-      timeRemaining: this.timeRemaining,
-      state: this.state,
+      timeRemaining: timeDisplay,
+      matchPhase: this.matchPhase, // 'waiting', 'first_half', 'half_time', 'second_half', 'game_over'
+      isMatchActive: this.matchPhase === 'first_half' || this.matchPhase === 'half_time' || this.matchPhase === 'second_half',
+      isHalfTime: this.matchPhase === 'half_time',
+      halfTimeTimer: this.halfTimeTimer,
+      state: this.matchPhase,
       ball: {
         x: Math.round(this.ball.pos.x * 10) / 10,
         y: Math.round(this.ball.pos.y * 10) / 10,
