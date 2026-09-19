@@ -38,10 +38,15 @@ export class InputController {
 
     const isFieldFocused = () => {
       const el = document.activeElement;
-      if (!el) return false;
+      if (!el || el === document.body) return false;
+      // In game view, only chat inputs should block WASD / movement
+      if (el.id === 'chat-input' || el.id === 'meeting-chat-input') {
+        return true;
+      }
       const isInput = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
       if (!isInput) return false;
-      return el.offsetParent !== null && !el.disabled;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && !el.disabled;
     };
 
     // Keyboard Listeners

@@ -463,6 +463,9 @@ class GameApp {
           Object.keys(this.input.keys).forEach(k => { this.input.keys[k] = false; });
         }
       }
+      document.querySelectorAll('input, textarea').forEach(el => {
+        if (el.blur) el.blur();
+      });
       if (document.activeElement && document.activeElement.blur && document.activeElement !== document.body) {
         document.activeElement.blur();
       }
