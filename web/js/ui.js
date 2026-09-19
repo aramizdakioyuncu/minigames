@@ -226,11 +226,20 @@ export class UIController {
       `;
 
       const btnJoin = item.querySelector('.btn-join');
-      btnJoin.addEventListener('click', () => {
+      const handleJoin = (e) => {
         if (!isFull) {
           onJoinCallback(room.id);
         }
-      });
+      };
+
+      item.style.cursor = isFull ? 'default' : 'pointer';
+      item.addEventListener('click', handleJoin);
+      if (btnJoin) {
+        btnJoin.addEventListener('click', (e) => {
+          e.stopPropagation();
+          handleJoin(e);
+        });
+      }
 
       this.roomsList.appendChild(item);
     });

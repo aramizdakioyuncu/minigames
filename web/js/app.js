@@ -125,19 +125,19 @@ class GameApp {
     // Modal Create Room
     if (this.ui.btnOpenCreateRoom) {
       this.ui.btnOpenCreateRoom.addEventListener('click', () => {
-        if (this.ui.modalCreateRoom) this.ui.modalCreateRoom.classList.add('active');
+        if (this.ui.modalCreateRoom) this.ui.modalCreateRoom.classList.remove('hidden');
       });
     }
 
     if (this.ui.btnCloseModal) {
       this.ui.btnCloseModal.addEventListener('click', () => {
-        if (this.ui.modalCreateRoom) this.ui.modalCreateRoom.classList.remove('active');
+        if (this.ui.modalCreateRoom) this.ui.modalCreateRoom.classList.add('hidden');
       });
     }
 
     if (this.ui.btnCancelCreate) {
       this.ui.btnCancelCreate.addEventListener('click', () => {
-        if (this.ui.modalCreateRoom) this.ui.modalCreateRoom.classList.remove('active');
+        if (this.ui.modalCreateRoom) this.ui.modalCreateRoom.classList.add('hidden');
       });
     }
 
@@ -147,7 +147,8 @@ class GameApp {
       card.addEventListener('click', () => {
         modeCards.forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
-        card.querySelector('input').checked = true;
+        const input = card.querySelector('input');
+        if (input) input.checked = true;
       });
     });
 
@@ -157,21 +158,23 @@ class GameApp {
       card.addEventListener('click', () => {
         speedCards.forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
-        card.querySelector('input').checked = true;
+        const input = card.querySelector('input');
+        if (input) input.checked = true;
       });
     });
 
-    // Submit Create Room
+    // Create Room Submit
     this.ui.btnSubmitCreateRoom.addEventListener('click', () => {
-      const roomName = this.ui.createRoomName.value.trim() || `${this.profile.name}'in Odası`;
+      const name = this.ui.createRoomName.value.trim() || `${this.profile.name}'in Odası`;
       const selectedMode = document.querySelector('input[name="create-room-mode"]:checked')?.value || 'puck';
-      const selectedSpeed = parseFloat(document.querySelector('input[name="create-room-speed"]:checked')?.value) || 1.0;
+      const selectedSpeed = parseFloat(document.querySelector('input[name="create-room-speed"]:checked')?.value || '1.0');
       const maxPlayers = parseInt(this.ui.createMaxPlayers.value) || 8;
-      const matchDuration = parseInt(document.getElementById('create-match-time')?.value) || 180;
-      const tackleEnabled = !!document.getElementById('create-tackle-enabled')?.checked;
+      const matchDuration = parseInt(document.getElementById('create-match-time')?.value || '180');
+      const tackleEnabled = document.getElementById('create-tackle-enabled')?.checked !== false;
 
-      this.socket.createRoom({
-        name: roomName,
+      this.socket.send({
+        type: 'create_room',
+        roomName: name,
         mode: selectedMode,
         speedMultiplier: selectedSpeed,
         matchDuration,
@@ -179,7 +182,7 @@ class GameApp {
         maxPlayers
       });
 
-      this.ui.modalCreateRoom.classList.remove('active');
+      this.ui.modalCreateRoom.classList.add('hidden');
       setTimeout(() => this.socket.send({ type: 'get_rooms' }), 200);
     });
 
@@ -286,12 +289,25 @@ class GameApp {
       });
     }
 
-    if (this.canvas) {
-      this.canvas.addEventListener('click', () => {
-        if (this.lastGameState && this.lastGameState.mode === 'space') {
-          this.checkSpaceTaskInteraction();
+    const handleGameAreaClick = (e) => {
+      const isChatField = e && e.target && (e.target.id === 'chat-input' || e.target.id === 'meeting-chat-input' || e.target.closest('#chat-form') || e.target.closest('#meeting-chat-form'));
+      if (!isChatField) {
+        if (document.activeElement && document.activeElement.blur && document.activeElement !== document.body) {
+          document.activeElement.blur();
         }
-      });
+        this.input.setChatting(false);
+        window.focus();
+      }
+      if (this.lastGameState && this.lastGameState.mode === 'space') {
+        this.checkSpaceTaskInteraction();
+      }
+    };
+
+    if (this.canvas) {
+      this.canvas.addEventListener('click', handleGameAreaClick);
+    }
+    if (this.ui.viewGame) {
+      this.ui.viewGame.addEventListener('click', handleGameAreaClick);
     }
 
     // ESC Menu Controls
@@ -435,6 +451,12 @@ class GameApp {
     this.socket.on('onJoinedRoom', (roomData) => {
       this.currentRoom = roomData;
       this.myCurrentRole = null;
+      this.input.setChatting(false);
+      this.input.resetKeys();
+      if (document.activeElement && document.activeElement.blur) {
+        document.activeElement.blur();
+      }
+      window.focus();
       if (roomData && roomData.mode) {
         this.ui.prepareGameHUD(roomData.mode, roomData);
       }

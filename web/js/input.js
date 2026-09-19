@@ -36,46 +36,67 @@ export class InputController {
       }
     });
 
+    const isFieldFocused = () => {
+      const el = document.activeElement;
+      if (!el) return false;
+      const isInput = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+      if (!isInput) return false;
+      return el.offsetParent !== null && !el.disabled;
+    };
+
     // Keyboard Listeners
     window.addEventListener('keydown', (e) => {
-      if (this.isChatting) return;
+      if (isFieldFocused()) {
+        this.isChatting = true;
+        return;
+      }
+      this.isChatting = false;
 
       const code = e.code;
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(code)) {
+      const key = (e.key || '').toLowerCase();
+
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(code) || [' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
         e.preventDefault();
       }
 
-      if (code === 'KeyW' || code === 'ArrowUp') this.keys.up = true;
-      if (code === 'KeyS' || code === 'ArrowDown') this.keys.down = true;
-      if (code === 'KeyA' || code === 'ArrowLeft') this.keys.left = true;
-      if (code === 'KeyD' || code === 'ArrowRight') this.keys.right = true;
-      if (code === 'Space' || code === 'KeyX' || code === 'KeyQ') this.keys.kick = true;
-      if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyE' || code === 'KeyC' || code === 'KeyF') {
+      if (code === 'KeyW' || code === 'ArrowUp' || key === 'w' || key === 'arrowup') this.keys.up = true;
+      if (code === 'KeyS' || code === 'ArrowDown' || key === 's' || key === 'arrowdown') this.keys.down = true;
+      if (code === 'KeyA' || code === 'ArrowLeft' || key === 'a' || key === 'arrowleft') this.keys.left = true;
+      if (code === 'KeyD' || code === 'ArrowRight' || key === 'd' || key === 'arrowright') this.keys.right = true;
+      if (code === 'Space' || code === 'KeyX' || code === 'KeyQ' || key === ' ' || key === 'x' || key === 'q') this.keys.kick = true;
+      if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyE' || code === 'KeyC' || code === 'KeyF' || key === 'shift' || key === 'e' || key === 'c' || key === 'f') {
         this.keys.hold = true;
         this.keys.use = true;
       }
-      if (code === 'KeyV') this.keys.vent = true;
-      if (code === 'KeyR') this.keys.report = true;
+      if (code === 'KeyV' || key === 'v') this.keys.vent = true;
+      if (code === 'KeyR' || key === 'r') this.keys.report = true;
     });
 
     window.addEventListener('keyup', (e) => {
       const code = e.code;
-      if (code === 'KeyW' || code === 'ArrowUp') this.keys.up = false;
-      if (code === 'KeyS' || code === 'ArrowDown') this.keys.down = false;
-      if (code === 'KeyA' || code === 'ArrowLeft') this.keys.left = false;
-      if (code === 'KeyD' || code === 'ArrowRight') this.keys.right = false;
-      if (code === 'Space' || code === 'KeyX' || code === 'KeyQ') this.keys.kick = false;
-      if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyE' || code === 'KeyC' || code === 'KeyF') {
+      const key = (e.key || '').toLowerCase();
+
+      if (code === 'KeyW' || code === 'ArrowUp' || key === 'w' || key === 'arrowup') this.keys.up = false;
+      if (code === 'KeyS' || code === 'ArrowDown' || key === 's' || key === 'arrowdown') this.keys.down = false;
+      if (code === 'KeyA' || code === 'ArrowLeft' || key === 'a' || key === 'arrowleft') this.keys.left = false;
+      if (code === 'KeyD' || code === 'ArrowRight' || key === 'd' || key === 'arrowright') this.keys.right = false;
+      if (code === 'Space' || code === 'KeyX' || code === 'KeyQ' || key === ' ' || key === 'x' || key === 'q') this.keys.kick = false;
+      if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyE' || code === 'KeyC' || code === 'KeyF' || key === 'shift' || key === 'e' || key === 'c' || key === 'f') {
         this.keys.hold = false;
         this.keys.use = false;
       }
-      if (code === 'KeyV') this.keys.vent = false;
-      if (code === 'KeyR') this.keys.report = false;
+      if (code === 'KeyV' || key === 'v') this.keys.vent = false;
+      if (code === 'KeyR' || key === 'r') this.keys.report = false;
+    });
+
+    // Reset keys on window blur
+    window.addEventListener('blur', () => {
+      this.resetKeys();
     });
 
     // Mouse Listeners
     window.addEventListener('mousedown', (e) => {
-      if (this.isChatting || e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+      if (isFieldFocused() || e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
       if (e.button === 0) { // Left click = Kick
         this.keys.kick = true;
       } else if (e.button === 2) { // Right click = Hold Ball Skill
@@ -202,18 +223,22 @@ export class InputController {
     }
   }
 
+  resetKeys() {
+    this.keys.up = false;
+    this.keys.down = false;
+    this.keys.left = false;
+    this.keys.right = false;
+    this.keys.kick = false;
+    this.keys.hold = false;
+    this.keys.vent = false;
+    this.keys.report = false;
+    this.keys.use = false;
+  }
+
   setChatting(active) {
     this.isChatting = active;
     if (active) {
-      this.keys.up = false;
-      this.keys.down = false;
-      this.keys.left = false;
-      this.keys.right = false;
-      this.keys.kick = false;
-      this.keys.hold = false;
-      this.keys.vent = false;
-      this.keys.report = false;
-      this.keys.use = false;
+      this.resetKeys();
     }
   }
 

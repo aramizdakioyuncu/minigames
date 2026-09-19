@@ -141,13 +141,23 @@ export class SocketClient {
   }
 
   joinRoom(roomId, playerProfile) {
-    this.send({
+    const payload = {
       type: 'join_room',
       roomId,
       name: playerProfile.name,
       color: playerProfile.color,
       avatar: playerProfile.avatar
-    });
+    };
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.send(payload);
+    } else {
+      this.connect().then(() => {
+        this.send(payload);
+      }).catch((err) => {
+        console.error('joinRoom connection error:', err);
+      });
+    }
   }
 
   createRoom(roomConfig) {
