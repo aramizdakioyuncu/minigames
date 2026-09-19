@@ -22,6 +22,8 @@ class GameApp {
     this.lastGameState = null;
     this.fps = 60;
     this.lastFrameTime = performance.now();
+    this.lastTimestamp = performance.now();
+    this.inputAccumulator = 0;
     this.frameCount = 0;
 
     this.init();
@@ -456,6 +458,10 @@ class GameApp {
   }
 
   loop(currentTime) {
+    // Delta-Time Calculation (capped at 100ms to avoid tab switch jumps)
+    const dt = Math.min((currentTime - this.lastTimestamp) / 1000, 0.1);
+    this.lastTimestamp = currentTime;
+
     // FPS calculation
     this.frameCount++;
     if (currentTime - this.lastFrameTime >= 1000) {
@@ -467,11 +473,17 @@ class GameApp {
       }
     }
 
-    // If currently in a game room, send input and render frame
     if (this.ui.currentView === 'view-game') {
-      const inputState = this.input.getState();
-      this.socket.sendInput(inputState);
-      this.renderer.render(this.lastGameState, this.socket.myPlayerId);
+      // Fixed 60Hz Input Send Rate (Throttles socket traffic to prevent jitter)
+      this.inputAccumulator += dt;
+      if (this.inputAccumulator >= 1 / 60) {
+        const inputState = this.input.getState();
+        this.socket.sendInput(inputState);
+        this.inputAccumulator %= (1 / 60);
+      }
+
+      // High-Performance WebGL Render with Delta-Time
+      this.renderer.render(this.lastGameState, this.socket.myPlayerId, dt);
     }
 
     requestAnimationFrame((t) => this.loop(t));
