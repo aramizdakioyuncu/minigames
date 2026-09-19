@@ -23,16 +23,16 @@ export class SocketClient {
     const host = window.location.hostname || 'localhost';
 
     const list = [];
-    // 1. Direct exposed socket port (5050)
-    list.push(`${proto}${host}:5050`);
-    
-    // 2. Nginx reverse proxy endpoint (/ws)
+    // 1. Primary Nginx reverse proxy endpoint (/ws) - Standard for Coolify domain & SSL
     if (window.location.host) {
       list.push(`${proto}${window.location.host}/ws`);
     }
 
-    // 3. Fallback Nginx port (8080/ws)
-    list.push(`${proto}${host}:8080/ws`);
+    // 2. Direct socket port fallback (for local standalone testing)
+    if (host === 'localhost' || host === '127.0.0.1') {
+      list.push(`${proto}${host}:5050`);
+      list.push(`${proto}${host}:8080/ws`);
+    }
 
     return list;
   }
