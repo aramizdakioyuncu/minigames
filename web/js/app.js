@@ -451,6 +451,10 @@ class GameApp {
     this.socket.on('onJoinedRoom', (roomData) => {
       this.currentRoom = roomData;
       this.myCurrentRole = null;
+      this.lastGameState = null;
+      if (this.renderer && typeof this.renderer.reset === 'function') {
+        this.renderer.reset();
+      }
       if (this.input) {
         if (typeof this.input.setChatting === 'function') this.input.setChatting(false);
         if (typeof this.input.resetKeys === 'function') {
@@ -476,6 +480,9 @@ class GameApp {
       this.currentRoom = null;
       this.lastGameState = null;
       this.myCurrentRole = null;
+      if (this.renderer && typeof this.renderer.reset === 'function') {
+        this.renderer.reset();
+      }
       this.ui.showView('view-lobby');
       if (roomsData.rooms) {
         this.ui.renderRooms(roomsData.rooms, (roomId) => this.joinRoom(roomId));
@@ -483,6 +490,14 @@ class GameApp {
     });
 
     this.socket.on('onGameState', (state) => {
+      if (!state) return;
+
+      // Auto-sync mode HUD if gameState mode differs from active HUD mode
+      if (state.mode && (!this.currentRoom || this.currentRoom.mode !== state.mode)) {
+        if (this.currentRoom) this.currentRoom.mode = state.mode;
+        this.ui.prepareGameHUD(state.mode, this.currentRoom || { mode: state.mode });
+      }
+
       this.lastGameState = state;
       this.ui.updateHUD(state, this.socket.myPlayerId);
       this.ui.updateEscMenu(state, this.socket.myPlayerId, this.currentRoom);

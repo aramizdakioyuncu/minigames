@@ -28,17 +28,21 @@ class ClientModeRegistry {
   }
 
   activate(modeType, roomData, ui) {
-    if (this.activeMode && this.activeMode.onDeactivate) {
+    const targetMode = this.getMode(modeType);
+    if (this.activeMode && this.activeMode !== targetMode && this.activeMode.onDeactivate) {
       this.activeMode.onDeactivate(ui);
     }
-    this.activeMode = this.getMode(modeType);
+    this.activeMode = targetMode;
     if (this.activeMode && this.activeMode.onActivate) {
       this.activeMode.onActivate(roomData, ui);
     }
     return this.activeMode;
   }
 
-  getActiveMode() {
+  getActiveMode(modeType) {
+    if (modeType && this.modes.has(modeType)) {
+      return this.modes.get(modeType);
+    }
     return this.activeMode || this.getMode('puck');
   }
 }

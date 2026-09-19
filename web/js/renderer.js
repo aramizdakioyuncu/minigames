@@ -77,6 +77,34 @@ export class GameRenderer {
     this.ctx = canvas.getContext('2d', { alpha: false });
   }
 
+  reset() {
+    this.entities.clear();
+    this.ballTrail = [];
+    this.particles = [];
+    this.camera = { x: 0, y: 0, zoom: 1.0 };
+    this.cachedArenaKey = null;
+
+    if (this.isWebGL && this.app) {
+      if (this.bgGraphics) this.bgGraphics.clear();
+      if (this.envGraphics) this.envGraphics.clear();
+      if (this.pelletsGraphics) this.pelletsGraphics.clear();
+      if (this.entitiesGraphics) this.entitiesGraphics.clear();
+      if (this.ballGraphics) this.ballGraphics.clear();
+      if (this.particlesGraphics) this.particlesGraphics.clear();
+
+      if (this.textPool) {
+        for (const [id, textObj] of this.textPool.entries()) {
+          if (this.entitiesTextContainer) {
+            this.entitiesTextContainer.removeChild(textObj);
+          }
+        }
+        this.textPool.clear();
+      }
+    } else if (this.ctx && this.canvas) {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+  }
+
   resize() {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.width = window.innerWidth;
@@ -193,7 +221,7 @@ export class GameRenderer {
     }
 
     // 2. Camera Tracking via Active Client Mode
-    const activeMode = clientModeRegistry.getActiveMode();
+    const activeMode = clientModeRegistry.getActiveMode(gameState ? gameState.mode : null);
     const isFixedArena = activeMode ? activeMode.isFixedArena() : false;
     const dims = activeMode ? activeMode.getArenaDimensions(gameState) : { width: 1200, height: 650 };
 
@@ -232,7 +260,7 @@ export class GameRenderer {
     if (!gameState) return;
 
     // Render Mode-Specific Environment & Entities
-    const activeMode = clientModeRegistry.getActiveMode();
+    const activeMode = clientModeRegistry.getActiveMode(gameState.mode);
     if (activeMode) {
       activeMode.renderEnvironment(this, this.envGraphics, gameState);
       activeMode.renderEntities(this, this.ballGraphics, gameState, this.entities, myPlayerId);
