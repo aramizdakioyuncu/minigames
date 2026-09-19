@@ -370,6 +370,29 @@ export class GameRenderer {
     }
   }
 
+  renderWebGLParticles(dt) {
+    const g = this.particlesGraphics;
+    if (!g) return;
+    g.clear();
+
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.alpha -= p.decay * (dt * 60);
+
+      if (p.alpha <= 0) {
+        this.particles.splice(i, 1);
+        continue;
+      }
+
+      const hexColor = p.hexColor || this.parseColorToHex(p.color);
+      g.beginFill(hexColor, Math.max(0, Math.min(1, p.alpha)));
+      g.drawCircle(p.x, p.y, p.radius);
+      g.endFill();
+    }
+  }
+
   // --- Fallback Canvas 2D Renderer (For legacy environments) ---
 
   renderCanvas2D(gameState, myPlayerId, dt) {
