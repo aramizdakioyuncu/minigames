@@ -249,25 +249,67 @@ export class GameRenderer {
     const bg = this.bgGraphics;
     const env = this.envGraphics;
 
-    // Outer Stadium Floor
-    bg.beginFill(0x0a101d);
-    bg.drawRect(-hw - 100, -hh - 130, w + 200, h + 260);
+    // 1. Outer Stadium Concrete Deck
+    bg.beginFill(0x070b14);
+    bg.drawRect(-hw - 120, -hh - 150, w + 240, h + 300);
     bg.endFill();
 
-    // Spectator Tribunes
-    bg.beginFill(0x111827);
-    bg.lineStyle(2, 0x38bdf8, 0.25);
-    bg.drawRect(-hw - 60, -hh - 110, w + 120, 85);
-    bg.drawRect(-hw - 60, hh + 25, w + 120, 85);
+    // 2. Top Spectator Tribune (Kuzey Tribünü)
+    const tribuneH = 110;
+    bg.beginFill(0x0f172a);
+    bg.lineStyle(2, 0x38bdf8, 0.3);
+    bg.drawRoundedRect(-hw - 80, -hh - 135, w + 160, tribuneH, 8);
     bg.endFill();
 
-    // Turf Shadow
+    // Top Tribune Stadium Chairs (Koltuk Sıraları)
+    const seatCols = Math.floor((w + 140) / 26);
+    for (let r = 0; r < 3; r++) {
+      const seatY = -hh - 120 + r * 28;
+      for (let c = 0; c < seatCols; c++) {
+        if (c % 12 === 5 || c % 12 === 6) continue; // Aisle walkway gap
+        const seatX = -hw - 70 + c * 26;
+        const chairColor = (c + r) % 2 === 0 ? 0x1e3a8a : 0x991b1b;
+        bg.lineStyle(1, 0x334155, 0.7);
+        bg.beginFill(chairColor, 0.85);
+        bg.drawRoundedRect(seatX, seatY, 18, 16, 3);
+        bg.endFill();
+      }
+    }
+
+    // 3. Bottom Spectator Tribune (Güney Tribünü)
+    bg.beginFill(0x0f172a);
+    bg.lineStyle(2, 0x38bdf8, 0.3);
+    bg.drawRoundedRect(-hw - 80, hh + 25, w + 160, tribuneH, 8);
+    bg.endFill();
+
+    // Bottom Tribune Stadium Chairs
+    for (let r = 0; r < 3; r++) {
+      const seatY = hh + 40 + r * 28;
+      for (let c = 0; c < seatCols; c++) {
+        if (c % 12 === 5 || c % 12 === 6) continue; // Aisle walkway gap
+        const seatX = -hw - 70 + c * 26;
+        const chairColor = (c + r) % 2 === 0 ? 0x991b1b : 0x1e3a8a;
+        bg.lineStyle(1, 0x334155, 0.7);
+        bg.beginFill(chairColor, 0.85);
+        bg.drawRoundedRect(seatX, seatY, 18, 16, 3);
+        bg.endFill();
+      }
+    }
+
+    // Glass Safety Railings (Tribün Cam Korkulukları)
+    env.lineStyle(3, 0x38bdf8, 0.7);
+    env.moveTo(-hw - 80, -hh - 22);
+    env.lineTo(hw + 80, -hh - 22);
+    env.moveTo(-hw - 80, hh + 22);
+    env.lineTo(hw + 80, hh + 22);
+
+    // 4. Pitch Outer Turf Border
     bg.lineStyle(0);
-    bg.beginFill(0x0f291e);
+    bg.beginFill(0x0d281a);
     bg.drawRect(-hw - 15, -hh - 15, w + 30, h + 30);
     bg.endFill();
 
-    // Pitch Stripes
+    // 5. Pitch Green Stripes
     const stripeCount = 12;
     const stripeW = w / stripeCount;
     for (let i = 0; i < stripeCount; i++) {
@@ -276,8 +318,8 @@ export class GameRenderer {
       bg.endFill();
     }
 
-    // Pitch Boundaries
-    env.lineStyle(4, 0xffffff, 0.75);
+    // 6. White Pitch Boundary Lines
+    env.lineStyle(4, 0xffffff, 0.85);
     env.drawRect(-hw, -hh, w, h);
 
     // Center Line & Circle
@@ -290,14 +332,19 @@ export class GameRenderer {
     env.drawCircle(0, 0, 4);
     env.endFill();
 
+    // Penalty Areas (Ceza Sahaları)
+    env.lineStyle(3, 0xffffff, 0.7);
+    env.drawRect(-hw, -gh - 30, gd + 40, (gh + 30) * 2);
+    env.drawRect(hw - gd - 40, -gh - 30, gd + 40, (gh + 30) * 2);
+
     // Goals (Red / Blue)
-    env.lineStyle(3, 0xef4444, 0.85);
-    env.beginFill(0xef4444, 0.15);
+    env.lineStyle(3, 0xef4444, 0.9);
+    env.beginFill(0xef4444, 0.18);
     env.drawRect(-hw - gd, -gh, gd, gh * 2);
     env.endFill();
 
-    env.lineStyle(3, 0x3b82f6, 0.85);
-    env.beginFill(0x3b82f6, 0.15);
+    env.lineStyle(3, 0x3b82f6, 0.9);
+    env.beginFill(0x3b82f6, 0.18);
     env.drawRect(hw, -gh, gd, gh * 2);
     env.endFill();
 
@@ -527,42 +574,61 @@ export class GameRenderer {
       : (gameState.players || []);
 
     for (const p of entities) {
-      if (p.isSpectator || p.isAlive === false) continue;
+      if (p.isAlive === false) continue;
+      const isSpectator = !!p.isSpectator;
       const cached = this.entities.get(p.id) || p;
       const isMe = p.id === myPlayerId || p.playerId === myPlayerId;
       const isVented = !!p.isVented;
       if (isVented && !isMe) continue;
 
       const g = new PIXI.Graphics();
-      const radius = p.r || 18;
-      const hexColor = this.parseColorToHex(p.color || (p.team === 'red' ? '#ef4444' : '#3b82f6'));
+      const radius = isSpectator ? 16 : (p.r || 18);
+      const hexColor = isSpectator ? 0x1e293b : this.parseColorToHex(p.color || (p.team === 'red' ? '#ef4444' : '#3b82f6'));
 
-      // Pulse ring for self
-      if (isMe) {
-        const pulseRadius = radius + 6 + Math.sin(Date.now() / 300) * 3;
-        g.lineStyle(2.5, 0xfacc15, 0.9);
-        g.drawCircle(cached.x, cached.y, pulseRadius);
+      if (isSpectator) {
+        // Spectator Disc in Tribune
+        g.lineStyle(isMe ? 2.5 : 1.5, isMe ? 0x38bdf8 : 0x64748b, isMe ? 0.95 : 0.6);
+        g.beginFill(0x0f172a, isMe ? 0.85 : 0.6);
+        g.drawCircle(cached.x, cached.y, radius);
+        g.endFill();
+
+        if (isMe) {
+          const pulseRadius = radius + 6 + Math.sin(Date.now() / 250) * 3;
+          g.lineStyle(2, 0x38bdf8, 0.8);
+          g.drawCircle(cached.x, cached.y, pulseRadius);
+        }
+      } else {
+        // Pulse ring for self
+        if (isMe) {
+          const pulseRadius = radius + 6 + Math.sin(Date.now() / 300) * 3;
+          g.lineStyle(2.5, 0xfacc15, 0.9);
+          g.drawCircle(cached.x, cached.y, pulseRadius);
+        }
+
+        // Ball Hold Shield
+        if (p.isHoldingBall) {
+          g.lineStyle(3, 0x38bdf8, 1.0);
+          g.drawCircle(cached.x, cached.y, radius + 8);
+        }
+
+        // Player Disc Body
+        g.lineStyle(isMe ? 3.5 : 2, isMe ? 0xfacc15 : 0xffffff, 0.9);
+        g.beginFill(hexColor, isVented ? 0.5 : 1.0);
+        g.drawCircle(cached.x, cached.y, radius);
+        g.endFill();
       }
-
-      // Ball Hold Shield
-      if (p.isHoldingBall) {
-        g.lineStyle(3, 0x38bdf8, 1.0);
-        g.drawCircle(cached.x, cached.y, radius + 8);
-      }
-
-      // Player Disc Body
-      g.lineStyle(isMe ? 3.5 : 2, isMe ? 0xfacc15 : 0xffffff, 0.9);
-      g.beginFill(hexColor, isVented ? 0.5 : 1.0);
-      g.drawCircle(cached.x, cached.y, radius);
-      g.endFill();
 
       // Text and Avatar Overlay via Pixi Text
       let textObj = this.textPool.get(p.id);
+      const labelText = isSpectator
+        ? `${isMe ? '👁️' : (p.avatar || '👁️')}\n${isMe ? '▼ TRİBÜNDESİN' : (p.name || 'İzleyici')}`
+        : `${p.avatar || '⚽'}\n${p.name || ''}`;
+
       if (!textObj) {
-        textObj = new PIXI.Text(`${p.avatar || '⚽'}\n${p.name || ''}`, {
+        textObj = new PIXI.Text(labelText, {
           fontFamily: 'Outfit, sans-serif',
           fontSize: Math.max(10, Math.floor(radius * 0.8)),
-          fill: 0xffffff,
+          fill: isSpectator ? 0x38bdf8 : 0xffffff,
           align: 'center',
           fontWeight: 'bold',
           dropShadow: true,
@@ -572,6 +638,9 @@ export class GameRenderer {
         });
         textObj.anchor.set(0.5, 0.5);
         this.textPool.set(p.id, textObj);
+      } else {
+        textObj.text = labelText;
+        textObj.style.fill = isSpectator ? (isMe ? 0x38bdf8 : 0x94a3b8) : 0xffffff;
       }
       textObj.position.set(cached.x, cached.y - (radius > 25 ? 0 : 2));
       textObj.alpha = isVented ? 0.5 : 1.0;

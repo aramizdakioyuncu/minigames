@@ -97,6 +97,11 @@ export class UIController {
     this.btnEscZoomToggle = document.getElementById('btn-esc-zoom-toggle');
     this.btnEscLeaveRoom = document.getElementById('btn-esc-leave-room');
 
+    // Spectator Banner Elements
+    this.hudSpectatorBanner = document.getElementById('hud-spectator-banner');
+    this.btnSpecJoinRed = document.getElementById('btn-spec-join-red');
+    this.btnSpecJoinBlue = document.getElementById('btn-spec-join-blue');
+
     this.hudLeaderboard = document.getElementById('hud-leaderboard');
     this.leaderboardList = document.getElementById('leaderboard-list');
     this.scoreRed = document.getElementById('score-red');
@@ -247,12 +252,32 @@ export class UIController {
       if (this.hudLeaderboard) this.hudLeaderboard.classList.add('hidden');
       if (this.hudTeamSwitcher) this.hudTeamSwitcher.classList.remove('hidden');
 
-      if (this.hintAction) this.hintAction.innerHTML = '⚡ <b>Boşluk / Sol Tık:</b> Şut & Pas';
-      if (this.hintHold) this.hintHold.innerHTML = '🧲 <b>Shift / E / Sağ Tık:</b> Top Tut & Çalım (2sn)';
+      const myP = (gameState.players || []).find(p => p.id === myPlayerId);
+      const isSpec = myP ? !!myP.isSpectator : false;
+      const currentTeam = myP ? (myP.isSpectator ? 'spec' : myP.team) : null;
+
+      // Update active team button highlight
+      const teamBtns = document.querySelectorAll('.btn-team');
+      teamBtns.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.team === currentTeam);
+      });
+
+      // Show/Hide Floating Spectator Banner
+      if (this.hudSpectatorBanner) {
+        this.hudSpectatorBanner.classList.toggle('hidden', !isSpec);
+      }
+
+      if (isSpec) {
+        if (this.hintAction) this.hintAction.innerHTML = '👁️ <b>İzleyici Modu:</b> Sahada oynamak için sol üstten veya alttan takım seç';
+        if (this.hintHold) this.hintHold.innerHTML = '🎮 <b>WASD:</b> Tribünde Gezin';
+      } else {
+        if (this.hintAction) this.hintAction.innerHTML = '⚡ <b>Boşluk / Sol Tık:</b> Şut & Pas';
+        if (this.hintHold) this.hintHold.innerHTML = '🧲 <b>Shift / E / Sağ Tık:</b> Top Tut & Çalım (2sn)';
+      }
       if (this.btnTouchAction) this.btnTouchAction.textContent = '⚡ ŞUT';
       if (this.btnTouchHold) {
         this.btnTouchHold.textContent = '🧲 TUT';
-        this.btnTouchHold.classList.remove('hidden');
+        this.btnTouchHold.classList.toggle('hidden', isSpec);
       }
 
       const s = gameState.modeState || {};

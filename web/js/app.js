@@ -211,6 +211,13 @@ class GameApp {
       });
     });
 
+    if (this.ui.btnSpecJoinRed) {
+      this.ui.btnSpecJoinRed.addEventListener('click', () => this.socket.changeTeam('red'));
+    }
+    if (this.ui.btnSpecJoinBlue) {
+      this.ui.btnSpecJoinBlue.addEventListener('click', () => this.socket.changeTeam('blue'));
+    }
+
     // Chat Form
     this.ui.chatForm.addEventListener('submit', (e) => {
       e.preventDefault();
