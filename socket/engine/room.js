@@ -122,22 +122,24 @@ export class Room {
     const player = this.players.get(id);
     if (!player) return;
 
-    if (actionData.type === 'restart_match') {
+    const actionType = actionData.type || actionData.action;
+
+    if (actionType === 'restart_match') {
       if (!this.hostId || this.hostId === id || this.players.size <= 1) {
         this.restartMatch(player.name);
       }
       return;
     }
 
-    if (actionData.type === 'start_match' || actionData.type === 'start_game' || actionData.type === 'stop_match' || actionData.type === 'toggle_match') {
+    if (actionType === 'start_match' || actionType === 'start_game' || actionType === 'stop_match' || actionType === 'toggle_match') {
       const isHost = !this.hostId || this.hostId === id || this.players.size <= 1;
-      if (isHost && this.mode && this.mode.handleAction) {
-        this.mode.handleAction(id, actionData);
+      if (isHost && this.mode && typeof this.mode.handleAction === 'function') {
+        this.mode.handleAction(id, { ...actionData, type: actionType });
       }
       return;
     }
 
-    if (actionData.type === 'vote_restart' || actionData.type === 'vote_start') {
+    if (actionType === 'vote_restart' || actionType === 'vote_start') {
       if (this.restartVotes.has(id)) {
         this.restartVotes.delete(id);
       } else {
@@ -156,9 +158,9 @@ export class Room {
       return;
     }
 
-    if (this.mode && this.mode.handleAction) {
-      this.mode.handleAction(id, actionData);
-    } else if (this.mode && this.mode.castVote && actionData.type === 'vote') {
+    if (this.mode && typeof this.mode.handleAction === 'function') {
+      this.mode.handleAction(id, { ...actionData, type: actionType });
+    } else if (this.mode && typeof this.mode.castVote === 'function' && actionType === 'vote') {
       this.mode.castVote(id, actionData.targetId);
     }
   }

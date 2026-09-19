@@ -128,9 +128,24 @@ wss.on('connection', (ws) => {
           break;
         }
 
-        case 'action': {
+        case 'action':
+        case 'start_match':
+        case 'start_game':
+        case 'stop_match':
+        case 'toggle_match':
+        case 'restart_match':
+        case 'vote_start':
+        case 'vote_restart':
+        case 'vote':
+        case 'complete_task':
+        case 'emergency_meeting':
+        case 'report': {
           if (currentRoom) {
-            currentRoom.handlePlayerAction(playerId, data);
+            const actionPayload = {
+              ...data,
+              type: data.action || data.actionType || data.type
+            };
+            currentRoom.handlePlayerAction(playerId, actionPayload);
           }
           break;
         }

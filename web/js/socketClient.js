@@ -199,8 +199,10 @@ export class SocketClient {
   }
 
   sendAction(actionData) {
+    if (!actionData) return;
     this.send({
       type: 'action',
+      action: actionData.type || actionData.action,
       ...actionData
     });
   }
