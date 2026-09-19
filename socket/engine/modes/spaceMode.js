@@ -143,9 +143,12 @@ export class SpaceMode {
 
   checkRolesDistribution() {
     const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
-    if (players.length < 2) {
-      // Solo practice mode: player can act as Impostor & Crewmate
-      players[0].role = 'impostor';
+    if (players.length === 0) return;
+    
+    if (players.length === 1) {
+      // Solo practice mode: player is crewmate by default to test tasks and interactions
+      players[0].role = 'crew';
+      this.calculateTaskTotal();
       return;
     }
 
@@ -167,7 +170,7 @@ export class SpaceMode {
 
   calculateTaskTotal() {
     const crewCount = Array.from(this.room.players.values()).filter(p => !p.isSpectator && p.role === 'crew').length;
-    this.totalTasks = Math.max(1, crewCount * this.taskStations.length);
+    this.totalTasks = Math.max(this.taskStations.length, crewCount * this.taskStations.length);
   }
 
   handlePlayerInput(player) {
@@ -302,7 +305,8 @@ export class SpaceMode {
       }
 
       if (canReport) {
-        this.startEmergencyMeeting(player.name, reportedBody ? `Ceset Bulundu: ${reportedBody.name}` : 'Acil Durum Butonuna Basıldı!');
+        const callerName = (player && player.name) ? player.name : 'Bir Oyuncu';
+        this.startEmergencyMeeting(callerName, reportedBody ? `Ceset Bulundu: ${reportedBody.name}` : 'Acil Durum Butonuna Basıldı!');
       }
     }
   }
@@ -314,6 +318,12 @@ export class SpaceMode {
       this.castVote(playerId, actionData.targetId);
     } else if (actionData.type === 'complete_task') {
       this.completeTask(playerId, actionData.taskId);
+    } else if (actionData.type === 'emergency_meeting' || actionData.type === 'report') {
+      const player = this.room.players.get(playerId);
+      if (player && player.isAlive && !player.isSpectator && this.gameState === 'playing') {
+        const callerName = player.name || 'Bir Oyuncu';
+        this.startEmergencyMeeting(callerName, 'Acil Durum Butonuna Basıldı!');
+      }
     }
   }
 
@@ -337,7 +347,7 @@ export class SpaceMode {
       this.room.broadcastEvent({
         type: 'sfx_task_complete',
         playerId: player.id,
-        playerName: player.name,
+        playerName: player.name || 'Oyuncu',
         taskName: station.name,
         x: station.x,
         y: station.y
@@ -349,7 +359,8 @@ export class SpaceMode {
 
   startEmergencyMeeting(reporterName, reason) {
     this.gameState = 'meeting';
-    this.meetingReason = reason;
+    const finalReporter = reporterName || 'Bir Oyuncu';
+    this.meetingReason = reason || 'Acil Durum Toplantısı!';
     this.meetingTimer = this.meetingDuration;
     this.votes.clear();
     this.bodies = []; // Clear bodies
@@ -363,8 +374,9 @@ export class SpaceMode {
 
     this.room.broadcastEvent({
       type: 'emergency_meeting',
-      reporter: reporterName,
-      reason: reason
+      caller: finalReporter,
+      reporter: finalReporter,
+      reason: this.meetingReason
     });
   }
 

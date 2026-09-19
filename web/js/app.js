@@ -276,6 +276,23 @@ class GameApp {
       });
     }
 
+    const btnTouchReport = document.getElementById('btn-touch-report');
+    if (btnTouchReport) {
+      btnTouchReport.addEventListener('click', () => {
+        if (this.lastGameState && this.lastGameState.mode === 'space') {
+          this.socket.sendAction({ type: 'emergency_meeting' });
+        }
+      });
+    }
+
+    if (this.canvas) {
+      this.canvas.addEventListener('click', () => {
+        if (this.lastGameState && this.lastGameState.mode === 'space') {
+          this.checkSpaceTaskInteraction();
+        }
+      });
+    }
+
     // ESC Menu Controls
     if (this.ui.btnOpenEscMenu) {
       this.ui.btnOpenEscMenu.addEventListener('click', () => {
@@ -337,16 +354,23 @@ class GameApp {
       });
     }
 
-    // Shortcut Enter to Chat / Escape for Menu / E or F for Task
+    // Keyboard Hotkeys
     window.addEventListener('keydown', (e) => {
+      if (this.ui.modalMeeting && !this.ui.modalMeeting.classList.contains('hidden')) {
+        // When meeting is active, allow voting shortcuts or chatting
+        if (e.key === 'Enter') {
+          if (document.activeElement !== this.ui.meetingChatInput && this.ui.meetingChatInput) {
+            e.preventDefault();
+            this.ui.meetingChatInput.focus();
+          }
+        }
+        return;
+      }
+
       if (e.key === 'Escape' && this.ui.currentView === 'view-game') {
         // If task interactive modal open, close it
         if (this.ui.modalTaskInteractive && !this.ui.modalTaskInteractive.classList.contains('hidden')) {
           this.ui.closeTaskMiniGame();
-          return;
-        }
-        // If meeting open, don't close meeting
-        if (this.ui.modalMeeting && !this.ui.modalMeeting.classList.contains('hidden')) {
           return;
         }
         this.ui.toggleEscMenu();
@@ -355,21 +379,20 @@ class GameApp {
       }
 
       if (e.key === 'Enter' && this.ui.currentView === 'view-game') {
-        const isMeetingOpen = this.ui.modalMeeting && !this.ui.modalMeeting.classList.contains('hidden');
-        if (isMeetingOpen) {
-          if (document.activeElement !== this.ui.meetingChatInput && this.ui.meetingChatInput) {
-            e.preventDefault();
-            this.ui.meetingChatInput.focus();
-          }
-        } else {
-          if (document.activeElement !== this.ui.chatInput) {
-            e.preventDefault();
-            this.ui.chatInput.focus();
-          }
+        if (document.activeElement !== this.ui.chatInput) {
+          e.preventDefault();
+          this.ui.chatInput.focus();
         }
-      } else if ((e.code === 'KeyE' || e.code === 'KeyF') && !this.input.isChatting) {
+      } else if ((e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'Space') && !this.input.isChatting) {
         if (this.lastGameState && this.lastGameState.mode === 'space') {
           this.checkSpaceTaskInteraction();
+        }
+      } else if (e.code === 'KeyR' && !this.input.isChatting) {
+        if (this.lastGameState && this.lastGameState.mode === 'space') {
+          const myP = (this.lastGameState.players || []).find(p => p.id === this.socket.myPlayerId);
+          if (myP && Math.hypot(myP.x, myP.y) < 120) {
+            this.socket.sendAction({ type: 'emergency_meeting' });
+          }
         }
       }
     });
@@ -391,7 +414,7 @@ class GameApp {
     for (const st of stations) {
       if (completedList.includes(st.id)) continue;
       const dist = Math.hypot(myP.x - st.x, myP.y - st.y);
-      if (dist <= 65) {
+      if (dist <= 85) {
         this.ui.openTaskMiniGame(st, (taskId) => {
           this.socket.sendAction({ type: 'complete_task', taskId });
         });
@@ -498,7 +521,8 @@ class GameApp {
             this.renderer.addKickSparks(evt.x, evt.y, '#10b981');
           } else if (evt.type === 'emergency_meeting') {
             audio.playEmergencySiren();
-            this.ui.showGoalBanner('🚨 ACİL TOPLANTI!', `${evt.caller} toplantı başlattı!`);
+            const callerName = evt.caller || evt.reporter || 'Bir oyuncu';
+            this.ui.showGoalBanner('🚨 ACİL TOPLANTI!', `${callerName} toplantı başlattı!`);
           } else if (evt.type === 'meeting_result') {
             if (evt.ejected) {
               audio.playEjection();
