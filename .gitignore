@@ -13,3 +13,4 @@ Thumbs.db
 
 # Environment variables
 .env
+docker-compose.override.yml
