@@ -69,7 +69,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     socketUrl: SOCKET_URL,
     version: '1.0.0',
-    title: 'PuckArena Mini-Games Arcade'
+    title: 'ARMOYU MiniGames Arcade'
   });
 });
 
