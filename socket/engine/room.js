@@ -17,6 +17,8 @@ export class Room {
     this.createdAt = Date.now();
 
     this.players = new Map(); // id -> PlayerBody
+    this.hostId = null;
+    this.restartVotes = new Set();
     this.eventQueue = [];
 
     this.initGameMode(modeType);
@@ -42,6 +44,18 @@ export class Room {
     } else {
       this.mode = new PuckMode(this);
     }
+  }
+
+  restartMatch(callerName = 'Host') {
+    this.initGameMode(this.modeType);
+    this.restartVotes.clear();
+    for (const player of this.players.values()) {
+      if (this.mode.onPlayerJoin) {
+        this.mode.onPlayerJoin(player);
+      }
+    }
+    this.broadcastEvent({ type: 'match_restarted', caller: callerName });
+    this.broadcastChat('Sistem', `🔄 Maç yeniden başlatıldı! (${callerName})`, '#38bdf8');
   }
 
   addPlayer(id, name, color, avatar, ws) {
@@ -74,6 +88,12 @@ export class Room {
     player.maxHoldDurationMs = 2000;
 
     this.players.set(id, player);
+
+    // Assign host if first player
+    if (!this.hostId) {
+      this.hostId = id;
+    }
+
     this.mode.onPlayerJoin(player);
 
     this.broadcastChat('Sistem', `${player.name} odaya katıldı!`, '#10b981');
@@ -84,6 +104,19 @@ export class Room {
     const player = this.players.get(id);
     if (player) {
       this.players.delete(id);
+      this.restartVotes.delete(id);
+
+      // Reassign host if host left
+      if (this.hostId === id) {
+        this.hostId = this.players.keys().next().value || null;
+        if (this.hostId) {
+          const newHost = this.players.get(this.hostId);
+          if (newHost) {
+            this.broadcastChat('Sistem', `👑 ${newHost.name} yeni oda kurucusu (Host) oldu!`, '#facc15');
+          }
+        }
+      }
+
       this.broadcastChat('Sistem', `${player.name} odadan ayrıldı.`, '#ef4444');
     }
   }
@@ -96,6 +129,31 @@ export class Room {
   }
 
   handlePlayerAction(id, actionData) {
+    if (!actionData) return;
+    const player = this.players.get(id);
+    if (!player) return;
+
+    if (actionData.type === 'restart_match') {
+      if (this.hostId === id) {
+        this.restartMatch(player.name);
+      }
+      return;
+    }
+
+    if (actionData.type === 'vote_restart') {
+      if (this.restartVotes.has(id)) {
+        this.restartVotes.delete(id);
+      } else {
+        this.restartVotes.add(id);
+      }
+      const neededVotes = Math.max(1, Math.ceil(this.players.size * 0.6));
+      this.broadcastChat('Oylama', `🗳️ ${player.name} maçı yeniden başlatma oyu verdi (${this.restartVotes.size}/${neededVotes})`, '#facc15');
+      if (this.restartVotes.size >= neededVotes) {
+        this.restartMatch('Oylama ile');
+      }
+      return;
+    }
+
     if (this.mode && this.mode.handleAction) {
       this.mode.handleAction(id, actionData);
     } else if (this.mode && this.mode.castVote && actionData.type === 'vote') {
@@ -225,6 +283,10 @@ export class Room {
       t: now,
       roomId: this.id,
       mode: this.modeType,
+      hostId: this.hostId,
+      restartVotesCount: this.restartVotes.size,
+      restartVotesNeeded: Math.max(1, Math.ceil(this.players.size * 0.6)),
+      hasVotedRestart: false, // populated per player or checked on client
       tackleEnabled: this.tackleEnabled,
       players: playersData,
       modeState: this.mode ? this.mode.getState() : {},

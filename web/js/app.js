@@ -269,8 +269,84 @@ class GameApp {
       });
     }
 
-    // Shortcut Enter to Chat / E or F for Task
+    // ESC Menu Controls
+    if (this.ui.btnOpenEscMenu) {
+      this.ui.btnOpenEscMenu.addEventListener('click', () => {
+        this.ui.toggleEscMenu();
+        this.ui.updateEscMenu(this.lastGameState, this.socket.myPlayerId, this.currentRoom);
+      });
+    }
+
+    if (this.ui.btnEscClose) {
+      this.ui.btnEscClose.addEventListener('click', () => this.ui.toggleEscMenu(false));
+    }
+
+    if (this.ui.btnEscResume) {
+      this.ui.btnEscResume.addEventListener('click', () => this.ui.toggleEscMenu(false));
+    }
+
+    if (this.ui.btnHostRestart) {
+      this.ui.btnHostRestart.addEventListener('click', () => {
+        this.socket.sendAction({ type: 'restart_match' });
+        this.ui.toggleEscMenu(false);
+      });
+    }
+
+    if (this.ui.btnPlayerVoteRestart) {
+      this.ui.btnPlayerVoteRestart.addEventListener('click', () => {
+        this.socket.sendAction({ type: 'vote_restart' });
+      });
+    }
+
+    if (this.ui.btnEscLeaveRoom) {
+      this.ui.btnEscLeaveRoom.addEventListener('click', () => {
+        this.ui.toggleEscMenu(false);
+        this.socket.leaveRoom();
+      });
+    }
+
+    if (this.ui.btnEscSoundToggle) {
+      this.ui.btnEscSoundToggle.addEventListener('click', () => {
+        const isMuted = audio.toggleMute();
+        this.ui.btnEscSoundToggle.textContent = isMuted ? '🔇 Ses Efektleri: Kapalı' : '🔊 Ses Efektleri: Açık';
+        if (this.ui.btnSoundToggle) {
+          this.ui.btnSoundToggle.textContent = isMuted ? '🔇' : '🔊';
+        }
+      });
+    }
+
+    if (this.ui.btnEscZoomToggle) {
+      this.currentZoomIndex = 0;
+      const zoomLevels = [
+        { zoom: 1.0, label: '🔍 Kamera Açısı: Normal (1.0x)' },
+        { zoom: 0.8, label: '🔍 Kamera Açısı: Geniş Açı (0.8x)' },
+        { zoom: 1.25, label: '🔍 Kamera Açısı: Yakın Açı (1.25x)' }
+      ];
+      this.ui.btnEscZoomToggle.addEventListener('click', () => {
+        this.currentZoomIndex = (this.currentZoomIndex + 1) % zoomLevels.length;
+        const current = zoomLevels[this.currentZoomIndex];
+        this.renderer.camera.zoom = current.zoom;
+        this.ui.btnEscZoomToggle.textContent = current.label;
+      });
+    }
+
+    // Shortcut Enter to Chat / Escape for Menu / E or F for Task
     window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.ui.currentView === 'view-game') {
+        // If task interactive modal open, close it
+        if (this.ui.modalTaskInteractive && !this.ui.modalTaskInteractive.classList.contains('hidden')) {
+          this.ui.closeTaskMiniGame();
+          return;
+        }
+        // If meeting open, don't close meeting
+        if (this.ui.modalMeeting && !this.ui.modalMeeting.classList.contains('hidden')) {
+          return;
+        }
+        this.ui.toggleEscMenu();
+        this.ui.updateEscMenu(this.lastGameState, this.socket.myPlayerId, this.currentRoom);
+        return;
+      }
+
       if (e.key === 'Enter' && this.ui.currentView === 'view-game') {
         const isMeetingOpen = this.ui.modalMeeting && !this.ui.modalMeeting.classList.contains('hidden');
         if (isMeetingOpen) {
@@ -361,6 +437,7 @@ class GameApp {
     this.socket.on('onGameState', (state) => {
       this.lastGameState = state;
       this.ui.updateHUD(state, this.socket.myPlayerId);
+      this.ui.updateEscMenu(state, this.socket.myPlayerId, this.currentRoom);
 
       // Check for space role reveal banner
       if (state.mode === 'space' && state.players) {
@@ -374,7 +451,10 @@ class GameApp {
       // Process Game Events (SFX, Announcements)
       if (state.events && state.events.length > 0) {
         state.events.forEach(evt => {
-          if (evt.type === 'sfx_kick') {
+          if (evt.type === 'match_restarted') {
+            audio.playTaskComplete();
+            this.ui.showGoalBanner('🔄 MAÇ YENİDEN BAŞLATILDI!', `Yeniden Başlatan: ${evt.caller || 'Host'}`);
+          } else if (evt.type === 'sfx_kick') {
             audio.playKick();
             this.renderer.addKickSparks(evt.x, evt.y);
           } else if (evt.type === 'sfx_bump') {

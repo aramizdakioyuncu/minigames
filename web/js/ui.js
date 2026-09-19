@@ -83,6 +83,20 @@ export class UIController {
       this.btnCloseTask.addEventListener('click', () => this.closeTaskMiniGame());
     }
 
+    // ESC Menu Modal Elements
+    this.modalEscMenu = document.getElementById('modal-esc-menu');
+    this.btnOpenEscMenu = document.getElementById('btn-open-esc-menu');
+    this.btnEscClose = document.getElementById('btn-esc-close');
+    this.btnEscResume = document.getElementById('btn-esc-resume');
+    this.escRoomName = document.getElementById('esc-room-name');
+    this.escHostBadge = document.getElementById('esc-room-host-badge');
+    this.btnHostRestart = document.getElementById('btn-host-restart');
+    this.btnPlayerVoteRestart = document.getElementById('btn-player-vote-restart');
+    this.escRestartVoteCount = document.getElementById('esc-restart-vote-count');
+    this.btnEscSoundToggle = document.getElementById('btn-esc-sound-toggle');
+    this.btnEscZoomToggle = document.getElementById('btn-esc-zoom-toggle');
+    this.btnEscLeaveRoom = document.getElementById('btn-esc-leave-room');
+
     this.hudLeaderboard = document.getElementById('hud-leaderboard');
     this.leaderboardList = document.getElementById('leaderboard-list');
     this.scoreRed = document.getElementById('score-red');
@@ -425,6 +439,53 @@ export class UIController {
 
     this.meetingChatMessages.appendChild(item);
     this.meetingChatMessages.scrollTop = this.meetingChatMessages.scrollHeight;
+  }
+
+  // --- ESC Pause & Quick Menu ---
+
+  toggleEscMenu(forceOpen = null) {
+    if (!this.modalEscMenu) return;
+    if (forceOpen === true) {
+      this.modalEscMenu.classList.remove('hidden');
+    } else if (forceOpen === false) {
+      this.modalEscMenu.classList.add('hidden');
+    } else {
+      this.modalEscMenu.classList.toggle('hidden');
+    }
+  }
+
+  isEscMenuOpen() {
+    return this.modalEscMenu && !this.modalEscMenu.classList.contains('hidden');
+  }
+
+  updateEscMenu(gameState, myPlayerId, roomData) {
+    if (!this.modalEscMenu) return;
+
+    if (roomData && this.escRoomName) {
+      this.escRoomName.textContent = `Oda: ${roomData.roomName || roomData.name || 'Arena'}`;
+    }
+
+    if (gameState) {
+      const isHost = gameState.hostId === myPlayerId;
+      const hostPlayer = (gameState.players || []).find(p => p.id === gameState.hostId);
+
+      if (this.escHostBadge) {
+        this.escHostBadge.textContent = `👑 Host: ${hostPlayer ? hostPlayer.name : 'Bilinmiyor'}${isHost ? ' (Sen)' : ''}`;
+      }
+
+      if (this.btnHostRestart) {
+        this.btnHostRestart.classList.toggle('hidden', !isHost);
+      }
+
+      if (this.btnPlayerVoteRestart) {
+        this.btnPlayerVoteRestart.classList.toggle('hidden', isHost);
+        const votes = gameState.restartVotesCount || 0;
+        const needed = gameState.restartVotesNeeded || 1;
+        if (this.escRestartVoteCount) {
+          this.escRestartVoteCount.textContent = `(${votes}/${needed})`;
+        }
+      }
+    }
   }
 
   // --- Interactive Mini-Tasks System ---

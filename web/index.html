@@ -300,11 +300,12 @@
         </div>
       </div>
 
-      <!-- HUD: Top Actions (Ping, FPS, Leave) -->
+      <!-- HUD: Top Actions (Ping, FPS, ESC Menu, Leave) -->
       <div class="hud-top-right">
         <div class="stat-pill"><span id="ping-display">-- ms</span></div>
         <div class="stat-pill"><span id="fps-display">60 FPS</span></div>
-        <button id="btn-leave-game" class="btn btn-danger btn-sm">Lobiden Çık</button>
+        <button id="btn-open-esc-menu" class="btn btn-secondary btn-sm" title="Oyun Menüsü (ESC)">⚙️ Menü (ESC)</button>
+        <button id="btn-leave-game" class="btn btn-danger btn-sm">Çık</button>
       </div>
 
       <!-- HUD: Team Switcher -->
@@ -486,6 +487,57 @@
                 <div class="radar-status" id="radar-status">Hedef sapması: %35</div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ESC Pause / Quick Options Modal -->
+      <div id="modal-esc-menu" class="modal-backdrop hidden">
+        <div class="glass-card esc-menu-card">
+          <div class="esc-header">
+            <h2 class="esc-title">⚙️ OYUN MENÜSÜ</h2>
+            <button class="btn-icon" id="btn-esc-close" title="Kapat">✕</button>
+          </div>
+
+          <!-- Room / Host Info -->
+          <div class="esc-room-info">
+            <div id="esc-room-name" class="esc-room-name">Oda: Disk Futbolu</div>
+            <div id="esc-room-host-badge" class="esc-host-badge">👑 Host: Oyuncu_1</div>
+          </div>
+
+          <!-- Match Actions -->
+          <div class="esc-actions-group">
+            <!-- Host Direct Restart Button -->
+            <button id="btn-host-restart" class="btn btn-primary btn-block hidden">
+              🔄 Maçı Yeniden Başlat (Host)
+            </button>
+
+            <!-- Player Vote Restart Button -->
+            <button id="btn-player-vote-restart" class="btn btn-warning btn-block">
+              🗳️ Maçı Yeniden Başlatma Oyu Ver <span id="esc-restart-vote-count">(0/0)</span>
+            </button>
+
+            <!-- Audio Toggle -->
+            <button id="btn-esc-sound-toggle" class="btn btn-secondary btn-block">
+              🔊 Ses Efektleri: Açık
+            </button>
+
+            <!-- Camera Zoom Toggle -->
+            <button id="btn-esc-zoom-toggle" class="btn btn-secondary btn-block">
+              🔍 Kamera Açısı: Normal (1.0x)
+            </button>
+
+            <!-- Leave Room -->
+            <button id="btn-esc-leave-room" class="btn btn-danger btn-block">
+              🚪 Odadan Ayrıl & Lobiye Dön
+            </button>
+          </div>
+
+          <!-- Resume Game -->
+          <div class="esc-footer">
+            <button id="btn-esc-resume" class="btn btn-accent btn-block">
+              ▶️ Oyuna Devam Et (ESC)
+            </button>
           </div>
         </div>
       </div>
