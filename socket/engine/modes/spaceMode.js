@@ -145,8 +145,38 @@ export class SpaceMode extends BaseMode {
     // Spawn at Cafeteria Table
     this.spawnAtCafeteria(player);
 
-    if (this.gameState === 'playing') {
-      this.checkRolesDistribution();
+    if (this.gameState === 'playing' || this.gameState === 'meeting') {
+      // If a match is already ongoing, check if there are active impostors
+      const hasImpostor = Array.from(this.room.players.values()).some(p => p.id !== player.id && p.role === 'impostor');
+      if (!hasImpostor) {
+        this.checkRolesDistribution();
+      } else {
+        player.role = 'crew';
+        this.recalculateTaskProgress();
+      }
+    } else {
+      this.recalculateTaskProgress();
+    }
+  }
+
+  onPlayerLeave(player) {
+    // Remove player's vote if meeting is active
+    if (this.votes.has(player.id)) {
+      this.votes.delete(player.id);
+    }
+    // Remove votes targeted at this leaving player
+    for (const [voterId, targetId] of this.votes.entries()) {
+      if (targetId === player.id) {
+        this.votes.set(voterId, 'skip');
+      }
+    }
+    // Remove dead body of this player if left on map
+    this.bodies = this.bodies.filter(b => b.id !== player.id);
+
+    // Recalculate tasks and win conditions
+    this.recalculateTaskProgress();
+    if (this.gameState === 'playing' || this.gameState === 'meeting') {
+      this.checkWinConditions();
     }
   }
 
@@ -161,7 +191,6 @@ export class SpaceMode extends BaseMode {
   startMatch(callerName = 'Host') {
     this.gameState = 'playing';
     this.winner = null;
-    this.completedTasks = 0;
     this.bodies = [];
     this.votes.clear();
     this.meetingReason = '';
@@ -177,6 +206,7 @@ export class SpaceMode extends BaseMode {
     });
 
     this.checkRolesDistribution();
+    this.recalculateTaskProgress();
 
     this.room.broadcastEvent({
       type: 'round_start',
@@ -194,7 +224,7 @@ export class SpaceMode extends BaseMode {
     if (players.length === 1) {
       // Solo practice mode: player is crewmate by default to test tasks and interactions
       players[0].role = 'crew';
-      this.calculateTaskTotal();
+      this.recalculateTaskProgress();
       return;
     }
 
@@ -207,12 +237,21 @@ export class SpaceMode extends BaseMode {
       shuffled[i].lastKillTime = Date.now() + 5000; // 5s initial cooldown
     }
 
-    this.calculateTaskTotal();
+    this.recalculateTaskProgress();
   }
 
-  calculateTaskTotal() {
-    const crewCount = Array.from(this.room.players.values()).filter(p => !p.isSpectator && p.role === 'crew').length;
+  recalculateTaskProgress() {
+    const crewPlayers = Array.from(this.room.players.values()).filter(p => !p.isSpectator && p.role === 'crew');
+    const crewCount = crewPlayers.length;
     this.totalTasks = Math.max(this.taskStations.length, crewCount * this.taskStations.length);
+
+    let completed = 0;
+    for (const p of crewPlayers) {
+      if (Array.isArray(p.completedTasksList)) {
+        completed += p.completedTasksList.length;
+      }
+    }
+    this.completedTasks = completed;
   }
 
   handlePlayerInput(player) {
@@ -230,7 +269,7 @@ export class SpaceMode extends BaseMode {
             if (player.taskProgress >= 1.0) {
               player.completedTasksList.push(task.id);
               player.taskProgress = 0;
-              this.completedTasks++;
+              this.recalculateTaskProgress();
               this.room.broadcastEvent({
                 type: 'sfx_task_complete',
                 playerId: player.id,
@@ -389,9 +428,7 @@ export class SpaceMode extends BaseMode {
 
     if (!player.completedTasksList.includes(taskId)) {
       player.completedTasksList.push(taskId);
-      if (this.gameState === 'playing') {
-        this.completedTasks++;
-      }
+      this.recalculateTaskProgress();
       player.taskProgress = 0;
 
       this.room.broadcastEvent({
@@ -578,6 +615,7 @@ export class SpaceMode extends BaseMode {
       this.spawnAtCafeteria(p);
     });
 
+    this.recalculateTaskProgress();
     this.room.broadcastChat('Sistem', '🛸 Lobi moduna dönüldü. Gemide serbestçe dolaşabilir veya yeni oyunu başlatabilirsiniz.', '#38bdf8');
   }
 
@@ -651,6 +689,7 @@ export class SpaceMode extends BaseMode {
     const playerList = Array.from(this.room.players.values());
     const skipCount = Array.from(this.votes.values()).filter(v => v === 'skip').length;
     const aliveImpostors = playerList.filter(p => !p.isSpectator && p.role === 'impostor' && p.isAlive).length;
+    const taskRatio = this.totalTasks > 0 ? Math.min(100, Math.round((this.completedTasks / this.totalTasks) * 100)) : 0;
 
     return {
       mode: 'space',
@@ -661,7 +700,7 @@ export class SpaceMode extends BaseMode {
       meetingTimer: Math.ceil(this.meetingTimer),
       totalTasks: this.totalTasks,
       completedTasks: this.completedTasks,
-      taskProgressRatio: this.totalTasks > 0 ? Math.round((this.completedTasks / this.totalTasks) * 100) : 0,
+      taskProgressRatio: taskRatio,
       skipVotesCount: skipCount,
       impostorsLeft: aliveImpostors,
       bodies: this.bodies,
