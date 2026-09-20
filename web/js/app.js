@@ -566,12 +566,45 @@ class GameApp {
             audio.playPickup();
           } else if (evt.type === 'sfx_split') {
             audio.playSplit();
-            this.renderer.addKickSparks(evt.x, evt.y, '#38bdf8');
+            this.renderer.addSplitEffect(
+              evt.originX ?? evt.x,
+              evt.originY ?? evt.y,
+              evt.targetX ?? evt.x,
+              evt.targetY ?? evt.y,
+              evt.dirX ?? 1,
+              evt.dirY ?? 0,
+              evt.color || '#38bdf8',
+              evt.radius || 24,
+              evt.childCellId,
+              evt.parentCellId
+            );
+          } else if (evt.type === 'sfx_merge') {
+            audio.playMerge();
+            this.renderer.addMergeEffect(
+              evt.fromX ?? evt.x,
+              evt.fromY ?? evt.y,
+              evt.toX ?? evt.x,
+              evt.toY ?? evt.y,
+              evt.targetRadius || 30,
+              evt.absorbedRadius || 20,
+              evt.color || '#38bdf8',
+              evt.targetCellId,
+              evt.absorbedCellId
+            );
           } else if (evt.type === 'sfx_eject') {
             audio.playEject();
           } else if (evt.type === 'sfx_eat_player') {
             audio.playEatPlayer();
-            this.renderer.addKickSparks(evt.x, evt.y, '#f43f5e');
+            this.renderer.addMergeEffect(
+              evt.fromX ?? evt.x,
+              evt.fromY ?? evt.y,
+              evt.toX ?? evt.x,
+              evt.toY ?? evt.y,
+              evt.targetRadius || 35,
+              evt.absorbedRadius || 20,
+              evt.preyColor || evt.color || '#f43f5e',
+              evt.targetCellId
+            );
             this.ui.addChatMessage('⚔️ Savaş', `${evt.eater}, ${evt.prey} adlı oyuncuyu yuttu!`, '#f43f5e');
           } else if (evt.type === 'sfx_hold_start') {
             audio.playMagnetHold();

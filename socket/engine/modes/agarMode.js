@@ -152,7 +152,7 @@ export class AgarMode extends BaseMode {
 
     const now = Date.now();
     const newCells = [];
-    let splitOccurred = false;
+    const splitEvents = [];
 
     for (const cell of player.cells) {
       if (cell.score >= 18 && (player.cells.length + newCells.length < 8)) {
@@ -183,18 +183,31 @@ export class AgarMode extends BaseMode {
         };
 
         newCells.push(childCell);
-        splitOccurred = true;
+        splitEvents.push({
+          parentCellId: cell.id,
+          childCellId: childCell.id,
+          originX: Math.round(cell.pos.x),
+          originY: Math.round(cell.pos.y),
+          targetX: Math.round(childCell.pos.x),
+          targetY: Math.round(childCell.pos.y),
+          dirX: Math.round(normX * 100) / 100,
+          dirY: Math.round(normY * 100) / 100,
+          radius: Math.round(childCell.radius)
+        });
       }
     }
 
-    if (splitOccurred) {
+    if (newCells.length > 0) {
       player.cells.push(...newCells);
-      this.room.broadcastEvent({
-        type: 'sfx_split',
-        x: player.pos.x,
-        y: player.pos.y,
-        playerId: player.id
-      });
+      for (const ev of splitEvents) {
+        this.room.broadcastEvent({
+          type: 'sfx_split',
+          playerId: player.id,
+          playerName: player.name,
+          color: player.color || '#3b82f6',
+          ...ev
+        });
+      }
     }
   }
 
@@ -303,10 +316,33 @@ export class AgarMode extends BaseMode {
             // Check if ready to merge
             if (now >= c1.canMergeAt && now >= c2.canMergeAt) {
               // Merge!
+              const fromX = Math.round(c2.pos.x);
+              const fromY = Math.round(c2.pos.y);
+              const toX = Math.round(c1.pos.x);
+              const toY = Math.round(c1.pos.y);
+              const absorbedId = c2.id;
+              const absorbedR = Math.round(c2.radius);
+              const targetId = c1.id;
+
               c1.score += c2.score;
               c1.radius = this.calcRadius(c1.score);
               player.cells.splice(j, 1);
               j--;
+
+              this.room.broadcastEvent({
+                type: 'sfx_merge',
+                playerId: player.id,
+                playerName: player.name,
+                color: player.color || '#3b82f6',
+                targetCellId: targetId,
+                absorbedCellId: absorbedId,
+                fromX,
+                fromY,
+                toX,
+                toY,
+                absorbedRadius: absorbedR,
+                targetRadius: Math.round(c1.radius)
+              });
             } else {
               // Elastic Push apart
               const overlap = minDist - dist;
@@ -362,6 +398,13 @@ export class AgarMode extends BaseMode {
             // Swallowing condition: Size difference > 15% and distance inside
             if (c1.radius > c2.radius * 1.15 && dist < c1.radius - c2.radius * 0.3) {
               // C1 eats C2
+              const fromX = Math.round(c2.pos.x);
+              const fromY = Math.round(c2.pos.y);
+              const toX = Math.round(c1.pos.x);
+              const toY = Math.round(c1.pos.y);
+              const preyR = Math.round(c2.radius);
+              const preyColor = p2.color || '#ef4444';
+
               c1.score += c2.score;
               c1.radius = this.calcRadius(c1.score);
               p2.cells.splice(j, 1);
@@ -370,11 +413,27 @@ export class AgarMode extends BaseMode {
                 type: 'sfx_eat_player',
                 eater: p1.name,
                 prey: p2.name,
+                color: p1.color || '#3b82f6',
+                preyColor,
+                targetCellId: c1.id,
+                fromX,
+                fromY,
+                toX,
+                toY,
+                absorbedRadius: preyR,
+                targetRadius: Math.round(c1.radius),
                 x: c1.pos.x,
                 y: c1.pos.y
               });
             } else if (c2.radius > c1.radius * 1.15 && dist < c2.radius - c1.radius * 0.3) {
               // C2 eats C1
+              const fromX = Math.round(c1.pos.x);
+              const fromY = Math.round(c1.pos.y);
+              const toX = Math.round(c2.pos.x);
+              const toY = Math.round(c2.pos.y);
+              const preyR = Math.round(c1.radius);
+              const preyColor = p1.color || '#ef4444';
+
               c2.score += c1.score;
               c2.radius = this.calcRadius(c2.score);
               p1.cells.splice(i, 1);
@@ -383,6 +442,15 @@ export class AgarMode extends BaseMode {
                 type: 'sfx_eat_player',
                 eater: p2.name,
                 prey: p1.name,
+                color: p2.color || '#3b82f6',
+                preyColor,
+                targetCellId: c2.id,
+                fromX,
+                fromY,
+                toX,
+                toY,
+                absorbedRadius: preyR,
+                targetRadius: Math.round(c2.radius),
                 x: c2.pos.x,
                 y: c2.pos.y
               });

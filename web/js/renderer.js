@@ -148,6 +148,7 @@ export class GameRenderer {
       const angle = Math.random() * Math.PI * 2;
       const speed = 2 + Math.random() * 6;
       this.particles.push({
+        type: 'spark',
         x, y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
@@ -160,6 +161,166 @@ export class GameRenderer {
     }
   }
 
+  addSplitEffect(originX, originY, targetX, targetY, dirX = 1, dirY = 0, color = '#38bdf8', radius = 24, childCellId = null, parentCellId = null) {
+    const hexColor = this.parseColorToHex(color);
+
+    // 1. Expanding Shockwave Ring at split origin
+    this.particles.push({
+      type: 'ring',
+      x: originX,
+      y: originY,
+      radius: Math.max(10, radius * 0.4),
+      growth: 3.8,
+      lineWidth: 3.5,
+      color,
+      hexColor,
+      alpha: 1.0,
+      decay: 0.045
+    });
+
+    // 2. Rupture Shockwave Ring at spawn target
+    this.particles.push({
+      type: 'ring',
+      x: targetX,
+      y: targetY,
+      radius: Math.max(8, radius * 0.3),
+      growth: 2.8,
+      lineWidth: 2.5,
+      color,
+      hexColor,
+      alpha: 0.85,
+      decay: 0.05
+    });
+
+    // 3. Directional High-Velocity Ejection Sparks & Bubbles
+    const count = 22;
+    for (let i = 0; i < count; i++) {
+      const spread = (Math.random() - 0.5) * 1.3;
+      const vx = (dirX + spread * -dirY) * (4 + Math.random() * 9);
+      const vy = (dirY + spread * dirX) * (4 + Math.random() * 9);
+      this.particles.push({
+        type: 'spark',
+        x: originX + (Math.random() - 0.5) * 16,
+        y: originY + (Math.random() - 0.5) * 16,
+        vx,
+        vy,
+        radius: 2 + Math.random() * 3.5,
+        color,
+        hexColor,
+        alpha: 1.0,
+        decay: 0.035 + Math.random() * 0.03
+      });
+    }
+
+    // 4. Set Cell Spring/Spawn Animation in this.entities
+    if (childCellId) {
+      let childCached = this.entities.get(childCellId);
+      if (!childCached) {
+        childCached = {
+          x: originX,
+          y: originY,
+          vx: dirX * 18,
+          vy: dirY * 18,
+          r: radius,
+          scaleBounce: 1.25,
+          wobblePhase: Math.random() * Math.PI * 2,
+          wobbleIntensity: 1.0
+        };
+        this.entities.set(childCellId, childCached);
+      }
+      childCached.spawnAnim = {
+        fromX: originX,
+        fromY: originY,
+        progress: 0
+      };
+      childCached.scaleBounce = 1.25;
+      childCached.wobbleIntensity = 1.0;
+    }
+
+    if (parentCellId) {
+      const parentCached = this.entities.get(parentCellId);
+      if (parentCached) {
+        parentCached.scaleBounce = 0.76; // Recoil squeeze
+        parentCached.wobbleIntensity = 1.0;
+      }
+    }
+  }
+
+  addMergeEffect(fromX, fromY, toX, toY, targetRadius = 30, absorbedRadius = 20, color = '#38bdf8', targetCellId = null, absorbedCellId = null) {
+    const hexColor = this.parseColorToHex(color);
+
+    // 1. Suction Ghost Orb (absorbed cell animated being sucked into target core)
+    this.particles.push({
+      type: 'suction_orb',
+      x: fromX,
+      y: fromY,
+      targetX: toX,
+      targetY: toY,
+      currentRadius: Math.max(10, absorbedRadius),
+      color,
+      hexColor,
+      progress: 0,
+      alpha: 0.95,
+      decay: 0.045
+    });
+
+    // 2. Fusion Flash Ring at receiver cell
+    this.particles.push({
+      type: 'ring',
+      x: toX,
+      y: toY,
+      radius: Math.max(12, targetRadius * 0.5),
+      growth: 4.2,
+      lineWidth: 4.0,
+      color: '#ffffff',
+      hexColor: 0xffffff,
+      alpha: 1.0,
+      decay: 0.04
+    });
+
+    this.particles.push({
+      type: 'ring',
+      x: toX,
+      y: toY,
+      radius: Math.max(16, targetRadius * 0.8),
+      growth: 3.2,
+      lineWidth: 3.0,
+      color,
+      hexColor,
+      alpha: 0.9,
+      decay: 0.035
+    });
+
+    // 3. Exploding fusion glitter & swirling sparkles
+    const count = 28;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2 + Math.random() * 8;
+      const isGlitter = Math.random() > 0.4;
+      this.particles.push({
+        type: 'spark',
+        x: toX,
+        y: toY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        radius: isGlitter ? (2 + Math.random() * 3) : (3 + Math.random() * 4),
+        color: isGlitter ? '#ffffff' : color,
+        hexColor: isGlitter ? 0xffffff : hexColor,
+        alpha: 1.0,
+        decay: 0.025 + Math.random() * 0.025
+      });
+    }
+
+    // 4. Elastic Swell Bounce on Receiver Cell
+    if (targetCellId) {
+      const targetCached = this.entities.get(targetCellId);
+      if (targetCached) {
+        targetCached.scaleBounce = 1.35; // Expands with bounce
+        targetCached.wobbleIntensity = 1.0;
+      }
+    }
+  }
+
   addGoalCelebration(x, y) {
     const colors = ['#facc15', '#f43f5e', '#38bdf8', '#10b981', '#a855f7'];
     for (let i = 0; i < 90; i++) {
@@ -167,6 +328,7 @@ export class GameRenderer {
       const speed = 3 + Math.random() * 11;
       const c = colors[Math.floor(Math.random() * colors.length)];
       this.particles.push({
+        type: 'spark',
         x, y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
@@ -192,29 +354,60 @@ export class GameRenderer {
     const blend = 1 - Math.exp(-28 * dt);
 
     let myPlayer = null;
-    if (gameState && gameState.players) {
-      for (const p of gameState.players) {
-        let cached = this.entities.get(p.id);
-        if (!cached) {
-          cached = { x: p.x, y: p.y, vx: p.vx || 0, vy: p.vy || 0, r: p.r || 18 };
-          this.entities.set(p.id, cached);
-        } else {
-          // If distance is large (e.g. respawn/goal reset), snap instantly without flying
-          const dist = Math.hypot(p.x - cached.x, p.y - cached.y);
-          if (dist > 160) {
-            cached.x = p.x;
-            cached.y = p.y;
-          } else {
-            // Smooth direct lerp without artificial forward overshooting
-            cached.x += (p.x - cached.x) * blend;
-            cached.y += (p.y - cached.y) * blend;
+    const isAgar = gameState && gameState.mode === 'agar' && gameState.modeState && gameState.modeState.cells;
+    const rawEntities = isAgar ? gameState.modeState.cells : (gameState ? (gameState.players || []) : []);
+
+    for (const p of rawEntities) {
+      let cached = this.entities.get(p.id);
+      if (!cached) {
+        cached = {
+          x: p.x,
+          y: p.y,
+          vx: p.vx || 0,
+          vy: p.vy || 0,
+          r: p.r || 18,
+          scaleBounce: 1.0,
+          wobblePhase: Math.random() * Math.PI * 2,
+          wobbleIntensity: 0
+        };
+        this.entities.set(p.id, cached);
+      } else {
+        // Handle spawn animation transition if active
+        if (cached.spawnAnim) {
+          cached.spawnAnim.progress += dt * 3.5;
+          if (cached.spawnAnim.progress >= 1) {
+            cached.spawnAnim = null;
           }
-          cached.vx = p.vx || 0;
-          cached.vy = p.vy || 0;
-          cached.r = p.r || 18;
         }
 
-        if (p.id === myPlayerId) {
+        const dist = Math.hypot(p.x - cached.x, p.y - cached.y);
+        if (dist > 180 && !cached.spawnAnim) {
+          cached.x = p.x;
+          cached.y = p.y;
+        } else {
+          // Smooth direct lerp without artificial forward overshooting
+          cached.x += (p.x - cached.x) * blend;
+          cached.y += (p.y - cached.y) * blend;
+        }
+        cached.vx = p.vx || 0;
+        cached.vy = p.vy || 0;
+        cached.r += ((p.r || 18) - cached.r) * blend;
+      }
+
+      // Smoothly spring scaleBounce back to 1.0
+      if (cached.scaleBounce !== undefined && cached.scaleBounce !== 1.0) {
+        cached.scaleBounce += (1.0 - cached.scaleBounce) * (1 - Math.exp(-12 * dt));
+        if (Math.abs(cached.scaleBounce - 1.0) < 0.005) cached.scaleBounce = 1.0;
+      }
+
+      // Smoothly decay wobble
+      if (cached.wobbleIntensity > 0) {
+        cached.wobbleIntensity -= dt * 2.0;
+        if (cached.wobbleIntensity < 0) cached.wobbleIntensity = 0;
+      }
+
+      if (p.id === myPlayerId || p.playerId === myPlayerId) {
+        if (!myPlayer || (p.score && myPlayer.score && p.score > myPlayer.score)) {
           myPlayer = { ...p, x: cached.x, y: cached.y };
         }
       }
@@ -272,11 +465,13 @@ export class GameRenderer {
     // Global Particles (Sparks, Celebrations)
     this.renderWebGLParticles(dt);
   }
+
   renderWebGLEntities(gameState, myPlayerId) {
     const g = this.entitiesGraphics;
     g.clear();
 
-    const entities = gameState.mode === 'agar' && gameState.modeState && gameState.modeState.cells
+    const isAgar = gameState.mode === 'agar' && gameState.modeState && gameState.modeState.cells;
+    const entities = isAgar
       ? gameState.modeState.cells
       : (gameState.players || []);
 
@@ -288,6 +483,32 @@ export class GameRenderer {
     const isImpostor = myP && myP.role === 'impostor';
     const isMeDead = myP && !myP.isAlive;
     const spaceVisionRadius = (isMeDead || isSpaceMeeting) ? 2200 : (isSpaceLobby ? 440 : (isImpostor ? 370 : 290));
+
+    // In Agar mode, draw merging bridges between touching cells of the same player
+    if (isAgar && entities.length > 1) {
+      for (let i = 0; i < entities.length; i++) {
+        const e1 = entities[i];
+        const c1 = this.entities.get(e1.id) || e1;
+        for (let j = i + 1; j < entities.length; j++) {
+          const e2 = entities[j];
+          if (e1.playerId === e2.playerId) {
+            const c2 = this.entities.get(e2.id) || e2;
+            const dist = Math.hypot(c2.x - c1.x, c2.y - c1.y);
+            const r1 = c1.r || 18;
+            const r2 = c2.r || 18;
+            if (dist < (r1 + r2) * 1.05 && dist > 1) {
+              const hexColor = this.parseColorToHex(e1.color || '#3b82f6');
+              const bridgeWidth = Math.min(r1, r2) * (1 - dist / ((r1 + r2) * 1.15));
+              if (bridgeWidth > 2) {
+                g.lineStyle(bridgeWidth, hexColor, 0.45);
+                g.moveTo(c1.x, c1.y);
+                g.lineTo(c2.x, c2.y);
+              }
+            }
+          }
+        }
+      }
+    }
 
     for (const p of entities) {
       if (p.isAlive === false) continue;
@@ -309,7 +530,17 @@ export class GameRenderer {
         }
       }
 
-      const radius = isSpectator ? 16 : (p.r || 18);
+      // Base radius with animated scale bounce and spawn animation
+      let radius = isSpectator ? 16 : (cached.r || p.r || 18);
+      if (cached.scaleBounce) {
+        radius *= cached.scaleBounce;
+      }
+      if (cached.spawnAnim) {
+        const prog = cached.spawnAnim.progress;
+        const spawnScale = 0.35 + 0.65 * (prog * (2 - prog)); // easeOutQuad
+        radius *= Math.max(0.35, Math.min(1.15, spawnScale));
+      }
+
       const hexColor = isSpectator ? 0x1e293b : this.parseColorToHex(p.color || (p.team === 'red' ? '#ef4444' : '#3b82f6'));
 
       if (isSpectator) {
@@ -324,8 +555,60 @@ export class GameRenderer {
           g.lineStyle(2, 0x38bdf8, 0.8);
           g.drawCircle(cached.x, cached.y, pulseRadius);
         }
+      } else if (isAgar) {
+        // --- Agar Organic Blob Cell Rendering ---
+        const timeNow = Date.now() / 1000;
+        const wobbleMag = (cached.wobbleIntensity || 0) * 2.5 + Math.min(3, (Math.hypot(cached.vx, cached.vy) || 0) * 0.15);
+
+        // 1. Soft Outer Bioluminescent Membrane Glow
+        g.lineStyle(isMe ? 3.5 : 2.0, isMe ? 0xfacc15 : 0xffffff, isMe ? 0.95 : 0.7);
+        g.beginFill(hexColor, 0.85);
+
+        if (wobbleMag > 0.5) {
+          // Organic Wobble Polygon
+          const points = 16;
+          const step = (Math.PI * 2) / points;
+          let firstX = 0;
+          let firstY = 0;
+
+          for (let i = 0; i < points; i++) {
+            const angle = i * step;
+            const wave = Math.sin(angle * 4 + timeNow * 6 + (cached.wobblePhase || 0)) * wobbleMag;
+            const rPoint = Math.max(8, radius + wave);
+            const px = cached.x + Math.cos(angle) * rPoint;
+            const py = cached.y + Math.sin(angle) * rPoint;
+
+            if (i === 0) {
+              firstX = px;
+              firstY = py;
+              g.moveTo(px, py);
+            } else {
+              g.lineTo(px, py);
+            }
+          }
+          g.lineTo(firstX, firstY);
+          g.closePath();
+          g.endFill();
+        } else {
+          // Smooth circle
+          g.drawCircle(cached.x, cached.y, radius);
+          g.endFill();
+        }
+
+        // 2. Inner Glowing Nucleus Core
+        g.lineStyle(0);
+        g.beginFill(0xffffff, 0.22);
+        g.drawCircle(cached.x - radius * 0.2, cached.y - radius * 0.2, radius * 0.45);
+        g.endFill();
+
+        // 3. Pulse ring for self
+        if (isMe) {
+          const pulseRadius = radius + 6 + Math.sin(Date.now() / 300) * 3;
+          g.lineStyle(2.5, 0xfacc15, 0.95);
+          g.drawCircle(cached.x, cached.y, pulseRadius);
+        }
       } else {
-        // Determine Team-Based Border & Indicator Colors
+        // Standard Disc Body (Puck Football, Sumo, Space)
         let borderColor = 0xffffff;
         let pulseColor = 0xfacc15;
 
@@ -364,12 +647,12 @@ export class GameRenderer {
       let textObj = this.textPool.get(p.id);
       const labelText = isSpectator
         ? `${isMe ? '👁️' : (p.avatar || '👁️')}\n${isMe ? '▼ TRİBÜNDESİN' : (p.name || 'İzleyici')}`
-        : `${p.avatar || '⚽'}\n${p.name || ''}`;
+        : (isAgar ? `${p.name || ''}\n${Math.floor(p.score || 0)}` : `${p.avatar || '⚽'}\n${p.name || ''}`);
 
       if (!textObj) {
         textObj = new PIXI.Text(labelText, {
           fontFamily: 'Outfit, sans-serif',
-          fontSize: Math.max(10, Math.floor(radius * 0.8)),
+          fontSize: Math.max(10, Math.floor(radius * 0.75)),
           fill: isSpectator ? 0x38bdf8 : 0xffffff,
           align: 'center',
           fontWeight: 'bold',
@@ -409,19 +692,56 @@ export class GameRenderer {
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.alpha -= p.decay * (dt * 60);
 
-      if (p.alpha <= 0) {
-        this.particles.splice(i, 1);
-        continue;
+      if (p.type === 'ring') {
+        p.radius += (p.growth || 3) * (dt * 60);
+        p.alpha -= p.decay * (dt * 60);
+        if (p.alpha <= 0) {
+          this.particles.splice(i, 1);
+          continue;
+        }
+        g.lineStyle(p.lineWidth || 2.5, p.hexColor, Math.max(0, Math.min(1, p.alpha)));
+        g.drawCircle(p.x, p.y, p.radius);
+      } else if (p.type === 'suction_orb') {
+        p.progress += (p.decay || 0.045) * (dt * 60);
+        if (p.progress >= 1) {
+          this.particles.splice(i, 1);
+          continue;
+        }
+        // Smooth cubic easing towards target
+        const t = p.progress;
+        const ease = t * t * (3 - 2 * t);
+        const curX = p.x + (p.targetX - p.x) * ease;
+        const curY = p.y + (p.targetY - p.y) * ease;
+        const curR = Math.max(3, p.currentRadius * (1 - ease * 0.82));
+        const alpha = Math.max(0, 1 - ease * 0.65);
+
+        // Suction tail line to target
+        g.lineStyle(2, p.hexColor, alpha * 0.5);
+        g.moveTo(curX, curY);
+        g.lineTo(p.targetX, p.targetY);
+
+        // Ghost orb
+        g.lineStyle(2, 0xffffff, alpha * 0.85);
+        g.beginFill(p.hexColor, alpha * 0.7);
+        g.drawCircle(curX, curY, curR);
+        g.endFill();
+      } else {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha -= p.decay * (dt * 60);
+
+        if (p.alpha <= 0) {
+          this.particles.splice(i, 1);
+          continue;
+        }
+
+        const hexColor = p.hexColor || this.parseColorToHex(p.color);
+        g.lineStyle(0);
+        g.beginFill(hexColor, Math.max(0, Math.min(1, p.alpha)));
+        g.drawCircle(p.x, p.y, p.radius);
+        g.endFill();
       }
-
-      const hexColor = p.hexColor || this.parseColorToHex(p.color);
-      g.beginFill(hexColor, Math.max(0, Math.min(1, p.alpha)));
-      g.drawCircle(p.x, p.y, p.radius);
-      g.endFill();
     }
   }
 
