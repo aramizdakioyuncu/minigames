@@ -8,9 +8,9 @@ export class SpaceMode extends BaseMode {
     this.type = 'space';
     this.name = 'Uzay Casusu (Spaceship Infiltration)';
 
-    // Spaceship Map Dimensions
-    this.width = 1800;
-    this.height = 1200;
+    // Spaceship Map Dimensions (Bigger Map)
+    this.width = 2800;
+    this.height = 1800;
 
     this.gameState = 'waiting'; // 'waiting' (Lobi Serbest Dolaşma), 'playing', 'meeting', 'game_over'
     this.meetingTimer = 0;
@@ -32,7 +32,7 @@ export class SpaceMode extends BaseMode {
     const hw = this.width / 2;
     const hh = this.height / 2;
 
-    // Room boundaries and interior spaceship walls
+    // Outer spaceship hull & internal architectural walls
     this.walls = [
       // Outer Ship Hull
       { p1: new Vec2(-hw, -hh), p2: new Vec2(hw, -hh) },
@@ -40,75 +40,89 @@ export class SpaceMode extends BaseMode {
       { p1: new Vec2(-hw, -hh), p2: new Vec2(-hw, hh) },
       { p1: new Vec2(hw, -hh), p2: new Vec2(hw, hh) },
 
-      // Cafeteria (Center) Walls with Door Openings
-      { p1: new Vec2(-250, -220), p2: new Vec2(-80, -220) },
-      { p1: new Vec2(80, -220), p2: new Vec2(250, -220) },
-      { p1: new Vec2(-250, 180), p2: new Vec2(-80, 180) },
-      { p1: new Vec2(80, 180), p2: new Vec2(250, 180) },
-      { p1: new Vec2(-250, -220), p2: new Vec2(-250, -60) },
-      { p1: new Vec2(-250, 60), p2: new Vec2(-250, 180) },
-      { p1: new Vec2(250, -220), p2: new Vec2(250, -60) },
-      { p1: new Vec2(250, 60), p2: new Vec2(250, 180) },
+      // Cafeteria (Center / Toplantı Masası) Walls with Wide Doorway Openings
+      { p1: new Vec2(-340, -300), p2: new Vec2(-100, -300) },
+      { p1: new Vec2(100, -300), p2: new Vec2(340, -300) },
+      { p1: new Vec2(-340, 240), p2: new Vec2(-100, 240) },
+      { p1: new Vec2(100, 240), p2: new Vec2(340, 240) },
+      { p1: new Vec2(-340, -300), p2: new Vec2(-340, -80) },
+      { p1: new Vec2(-340, 80), p2: new Vec2(-340, 240) },
+      { p1: new Vec2(340, -300), p2: new Vec2(340, -80) },
+      { p1: new Vec2(340, 80), p2: new Vec2(340, 240) },
 
       // Reactor & Engine (Left Room)
-      { p1: new Vec2(-650, -350), p2: new Vec2(-420, -350) },
-      { p1: new Vec2(-420, -350), p2: new Vec2(-420, -80) },
-      { p1: new Vec2(-420, 80), p2: new Vec2(-420, 350) },
-      { p1: new Vec2(-650, 350), p2: new Vec2(-420, 350) },
+      { p1: new Vec2(-1150, -450), p2: new Vec2(-680, -450) },
+      { p1: new Vec2(-680, -450), p2: new Vec2(-680, -100) },
+      { p1: new Vec2(-680, 100), p2: new Vec2(-680, 450) },
+      { p1: new Vec2(-1150, 450), p2: new Vec2(-680, 450) },
 
       // Electrical (Bottom Left)
-      { p1: new Vec2(-600, 220), p2: new Vec2(-320, 220) },
-      { p1: new Vec2(-320, 220), p2: new Vec2(-320, 480) },
+      { p1: new Vec2(-950, 360), p2: new Vec2(-520, 360) },
+      { p1: new Vec2(-520, 360), p2: new Vec2(-520, 750) },
 
       // Cockpit / Navigation (Right Room)
-      { p1: new Vec2(450, -280), p2: new Vec2(720, -280) },
-      { p1: new Vec2(450, -280), p2: new Vec2(450, -80) },
-      { p1: new Vec2(450, 80), p2: new Vec2(450, 280) },
-      { p1: new Vec2(450, 280), p2: new Vec2(720, 280) },
+      { p1: new Vec2(700, -450), p2: new Vec2(1180, -450) },
+      { p1: new Vec2(700, -450), p2: new Vec2(700, -100) },
+      { p1: new Vec2(700, 100), p2: new Vec2(700, 450) },
+      { p1: new Vec2(700, 450), p2: new Vec2(1180, 450) },
 
       // MedBay / Revir (Top Room)
-      { p1: new Vec2(-220, -480), p2: new Vec2(220, -480) },
-      { p1: new Vec2(-220, -480), p2: new Vec2(-220, -320) },
-      { p1: new Vec2(220, -480), p2: new Vec2(220, -320) },
+      { p1: new Vec2(-300, -780), p2: new Vec2(300, -780) },
+      { p1: new Vec2(-300, -780), p2: new Vec2(-300, -460) },
+      { p1: new Vec2(300, -780), p2: new Vec2(300, -460) },
 
       // Security / Kalkan (Bottom Room)
-      { p1: new Vec2(-180, 280), p2: new Vec2(180, 280) },
-      { p1: new Vec2(-180, 280), p2: new Vec2(-180, 480) },
-      { p1: new Vec2(180, 280), p2: new Vec2(180, 480) }
+      { p1: new Vec2(-280, 460), p2: new Vec2(280, 460) },
+      { p1: new Vec2(-280, 460), p2: new Vec2(-280, 780) },
+      { p1: new Vec2(280, 460), p2: new Vec2(280, 780) },
+
+      // O2 / Yaşam Destek (Top Right Room)
+      { p1: new Vec2(520, -750), p2: new Vec2(920, -750) },
+      { p1: new Vec2(520, -750), p2: new Vec2(520, -480) },
+      { p1: new Vec2(920, -750), p2: new Vec2(920, -480) },
+
+      // Storage / Depo (Bottom Right Room)
+      { p1: new Vec2(500, 460), p2: new Vec2(950, 460) },
+      { p1: new Vec2(500, 460), p2: new Vec2(500, 800) },
+      { p1: new Vec2(950, 460), p2: new Vec2(950, 800) }
     ];
 
-    // Room Label Zones for Mini-Map and Ambient lighting
+    // Room Label Zones for Mini-Map and Fog vision
     this.roomsList = [
-      { id: 'cafeteria', name: 'Kafeterya (Merkez)', x: 0, y: -20, w: 480, h: 380, icon: '☕' },
-      { id: 'reactor', name: 'Reaktör & Motor', x: -550, y: 0, w: 260, h: 600, icon: '⚛️' },
-      { id: 'electrical', name: 'Elektrik & Jeneratör', x: -460, y: 350, w: 260, h: 240, icon: '⚡' },
-      { id: 'medbay', name: 'Revir (MedBay)', x: 0, y: -400, w: 420, h: 160, icon: '💊' },
-      { id: 'cockpit', name: 'Kokpit & Seyir', x: 580, y: 0, w: 260, h: 540, icon: '🚀' },
-      { id: 'security', name: 'Güvenlik & Kalkan', x: 0, y: 380, w: 340, h: 200, icon: '🛡️' }
+      { id: 'cafeteria', name: 'Kafeterya (Merkez)', x: 0, y: -30, w: 640, h: 500, icon: '☕' },
+      { id: 'reactor', name: 'Reaktör & Motor Odası', x: -910, y: 0, w: 420, h: 840, icon: '⚛️' },
+      { id: 'electrical', name: 'Elektrik & Jeneratör', x: -730, y: 550, w: 400, h: 360, icon: '⚡' },
+      { id: 'medbay', name: 'Revir (MedBay Tarama)', x: 0, y: -620, w: 560, h: 280, icon: '💊' },
+      { id: 'cockpit', name: 'Kokpit & Seyir / Navigasyon', x: 940, y: 0, w: 440, h: 840, icon: '🚀' },
+      { id: 'security', name: 'Güvenlik & Kalkan', x: 0, y: 620, w: 520, h: 300, icon: '🛡️' },
+      { id: 'o2', name: 'O2 & Yaşam Destek', x: 720, y: -610, w: 380, h: 260, icon: '🍃' },
+      { id: 'storage', name: 'Depo & Kargo Bölümü', x: 720, y: 630, w: 420, h: 320, icon: '📦' }
     ];
   }
 
   initVents() {
-    // Interconnected Vents for Impostor
+    // Interconnected Vents for Impostor (Expanded Ship Map)
     this.vents = [
-      { id: 'vent_elec', room: 'electrical', x: -480, y: 400, connectsTo: ['vent_react', 'vent_sec'] },
-      { id: 'vent_react', room: 'reactor', x: -540, y: -200, connectsTo: ['vent_elec', 'vent_med'] },
-      { id: 'vent_med', room: 'medbay', x: -140, y: -420, connectsTo: ['vent_react', 'vent_cafe'] },
-      { id: 'vent_cafe', room: 'cafeteria', x: 180, y: -160, connectsTo: ['vent_med', 'vent_cockpit'] },
-      { id: 'vent_cockpit', room: 'cockpit', x: 600, y: -180, connectsTo: ['vent_cafe', 'vent_sec'] },
-      { id: 'vent_sec', room: 'security', x: 100, y: 400, connectsTo: ['vent_cockpit', 'vent_elec'] }
+      { id: 'vent_elec', room: 'electrical', x: -750, y: 580, connectsTo: ['vent_react', 'vent_sec'] },
+      { id: 'vent_react', room: 'reactor', x: -940, y: -260, connectsTo: ['vent_elec', 'vent_med'] },
+      { id: 'vent_med', room: 'medbay', x: -180, y: -640, connectsTo: ['vent_react', 'vent_cafe'] },
+      { id: 'vent_cafe', room: 'cafeteria', x: 250, y: -220, connectsTo: ['vent_med', 'vent_o2'] },
+      { id: 'vent_o2', room: 'o2', x: 760, y: -620, connectsTo: ['vent_cafe', 'vent_cockpit'] },
+      { id: 'vent_cockpit', room: 'cockpit', x: 960, y: -240, connectsTo: ['vent_o2', 'vent_storage'] },
+      { id: 'vent_storage', room: 'storage', x: 760, y: 640, connectsTo: ['vent_cockpit', 'vent_sec'] },
+      { id: 'vent_sec', room: 'security', x: 160, y: 640, connectsTo: ['vent_storage', 'vent_elec'] }
     ];
   }
 
   initTaskStations() {
-    // Tasks around the ship
+    // Distributed Tasks around the expanded starship
     this.taskStations = [
-      { id: 'task_wires_elec', room: 'electrical', name: '⚡ Kabloları Onar', x: -400, y: 300, icon: '⚡', timeSec: 2 },
-      { id: 'task_reactor_align', room: 'reactor', name: '⚛️ Reaktörü Soğut', x: -550, y: 150, icon: '⚛️', timeSec: 3 },
-      { id: 'task_scan_medbay', room: 'medbay', name: '💊 Biyometrik Tarama', x: 100, y: -420, icon: '💊', timeSec: 3 },
-      { id: 'task_steer_cockpit', room: 'cockpit', name: '🚀 Rotayı Belirle', x: 620, y: 120, icon: '🚀', timeSec: 2 },
-      { id: 'task_shields_sec', room: 'security', name: '🛡️ Kalkanları Güçlendir', x: -100, y: 420, icon: '🛡️', timeSec: 2 },
-      { id: 'task_trash_cafe', room: 'cafeteria', name: '☕ Çöpleri Boşalt', x: -180, y: 120, icon: '🗑️', timeSec: 2 }
+      { id: 'task_wires_elec', room: 'electrical', name: '⚡ Kabloları Onar', x: -720, y: 560, icon: '⚡', timeSec: 2 },
+      { id: 'task_reactor_align', room: 'reactor', name: '⚛️ Reaktörü Soğut', x: -920, y: 200, icon: '⚛️', timeSec: 3 },
+      { id: 'task_scan_medbay', room: 'medbay', name: '💊 Biyometrik Tarama', x: 140, y: -630, icon: '💊', timeSec: 3 },
+      { id: 'task_steer_cockpit', room: 'cockpit', name: '🚀 Rotayı Belirle', x: 980, y: 180, icon: '🚀', timeSec: 2 },
+      { id: 'task_shields_sec', room: 'security', name: '🛡️ Kalkanları Güçlendir', x: -140, y: 640, icon: '🛡️', timeSec: 2 },
+      { id: 'task_trash_cafe', room: 'cafeteria', name: '☕ Çöpleri Boşalt', x: -250, y: 140, icon: '🗑️', timeSec: 2 }
     ];
   }
 
@@ -365,7 +379,6 @@ export class SpaceMode extends BaseMode {
   completeTask(playerId, taskId) {
     const player = this.room.players.get(playerId);
     if (!player || player.isSpectator) return;
-    if (this.gameState !== 'playing') return;
 
     const station = this.taskStations.find(s => s.id === taskId);
     if (!station) return;
@@ -376,7 +389,9 @@ export class SpaceMode extends BaseMode {
 
     if (!player.completedTasksList.includes(taskId)) {
       player.completedTasksList.push(taskId);
-      this.completedTasks++;
+      if (this.gameState === 'playing') {
+        this.completedTasks++;
+      }
       player.taskProgress = 0;
 
       this.room.broadcastEvent({
@@ -388,7 +403,9 @@ export class SpaceMode extends BaseMode {
         y: station.y
       });
 
-      this.checkWinConditions();
+      if (this.gameState === 'playing') {
+        this.checkWinConditions();
+      }
     }
   }
 

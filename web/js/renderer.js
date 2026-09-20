@@ -281,6 +281,13 @@ export class GameRenderer {
       : (gameState.players || []);
 
     const activeIds = new Set();
+    const myP = (gameState.players || []).find(p => p.id === myPlayerId);
+    const isSpaceMode = gameState.mode === 'space';
+    const isSpaceMeeting = isSpaceMode && gameState.modeState && gameState.modeState.gameState === 'meeting';
+    const isSpaceLobby = isSpaceMode && gameState.modeState && gameState.modeState.gameState === 'waiting';
+    const isImpostor = myP && myP.role === 'impostor';
+    const isMeDead = myP && !myP.isAlive;
+    const spaceVisionRadius = (isMeDead || isSpaceMeeting) ? 2200 : (isSpaceLobby ? 440 : (isImpostor ? 370 : 290));
 
     for (const p of entities) {
       if (p.isAlive === false) continue;
@@ -291,6 +298,16 @@ export class GameRenderer {
       const isMe = p.id === myPlayerId || p.playerId === myPlayerId;
       const isVented = !!p.isVented;
       if (isVented && !isMe) continue;
+
+      // Fog of War Visibility Filter in Space Mode
+      if (isSpaceMode && !isSpaceMeeting && !isMeDead && !isMe && myP) {
+        const distToMe = Math.hypot(cached.x - myP.x, cached.y - myP.y);
+        if (distToMe > spaceVisionRadius + 35) {
+          const t = this.textPool.get(p.id);
+          if (t) t.visible = false;
+          continue; // Hidden in space darkness
+        }
+      }
 
       const radius = isSpectator ? 16 : (p.r || 18);
       const hexColor = isSpectator ? 0x1e293b : this.parseColorToHex(p.color || (p.team === 'red' ? '#ef4444' : '#3b82f6'));
@@ -496,9 +513,10 @@ export class GameRenderer {
     ctx.arc(0, 0, 90, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+    const isSecondHalf = modeState && (modeState.matchPhase === 'second_half');
+    ctx.fillStyle = isSecondHalf ? 'rgba(59, 130, 246, 0.2)' : 'rgba(239, 68, 68, 0.2)';
     ctx.fillRect(-hw - gd, -gh, gd, gh * 2);
-    ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
+    ctx.fillStyle = isSecondHalf ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.2)';
     ctx.fillRect(hw, -gh, gd, gh * 2);
   }
 

@@ -659,22 +659,42 @@ export class UIController {
   initTrashTask(onComplete) {
     const handle = document.getElementById('trash-lever-handle');
     const particles = document.getElementById('trash-particles');
-    if (!handle) return;
+    const track = document.getElementById('trash-lever-track');
+    const btnPull = document.getElementById('btn-pull-trash');
 
     if (particles) particles.classList.remove('emptied');
-    handle.classList.remove('pulled');
+    if (handle) handle.classList.remove('pulled');
 
+    let completed = false;
     const triggerPull = () => {
-      handle.classList.add('pulled');
+      if (completed) return;
+      completed = true;
+
+      if (handle) handle.classList.add('pulled');
       if (particles) particles.classList.add('emptied');
+      if (btnPull) {
+        btnPull.textContent = '🚀 ÇÖPLER UZAYA FIRLATILDI! ✅';
+        btnPull.className = 'btn btn-success btn-block';
+      }
 
       setTimeout(() => {
         if (onComplete) onComplete(this.activeTaskStation ? this.activeTaskStation.id : 'task_trash_cafe');
         this.closeTaskMiniGame();
-      }, 900);
+      }, 750);
     };
 
-    handle.onclick = triggerPull;
+    if (handle) {
+      handle.onclick = (e) => { e.stopPropagation(); triggerPull(); };
+      handle.ontouchstart = (e) => { e.stopPropagation(); triggerPull(); };
+    }
+    if (track) {
+      track.onclick = triggerPull;
+    }
+    if (btnPull) {
+      btnPull.textContent = '🗑️ ÇÖP KAPAĞINI AÇ & UZAYA BOŞALT';
+      btnPull.className = 'btn btn-danger btn-block';
+      btnPull.onclick = triggerPull;
+    }
   }
 
   initReactorTask(onComplete) {

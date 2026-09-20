@@ -326,6 +326,7 @@ export class PuckMode extends BaseMode {
         if (canHold && inBallReach) {
           p1.isHoldingBall = true;
           p1.holdStartTime = now;
+          p1.holdAngle = Math.atan2(this.ball.pos.y - p1.pos.y, this.ball.pos.x - p1.pos.x);
           this.room.broadcastEvent({
             type: 'sfx_hold_start',
             playerId: p1.id,
@@ -344,16 +345,14 @@ export class PuckMode extends BaseMode {
           p1.isHoldingBall = false;
           p1.lastHoldEndTime = now;
 
-          let dirX = p1.vel.x;
-          let dirY = p1.vel.y;
-          if (Math.hypot(dirX, dirY) < 0.1) {
-            dirX = p1.team === 'red' ? 1 : -1;
-            dirY = 0;
+          let releaseAngle = p1.holdAngle !== undefined ? p1.holdAngle : Math.atan2(p1.vel.y, p1.vel.x);
+          const speed = Math.hypot(p1.vel.x, p1.vel.y);
+          if (speed > 0.3) {
+            releaseAngle = Math.atan2(p1.vel.y, p1.vel.x);
           }
-          const len = Math.hypot(dirX, dirY) || 1;
           const releasePower = kickPressed ? (p1.kickPower * 1.3) : 10;
 
-          this.ball.vel.set((dirX / len) * releasePower, (dirY / len) * releasePower);
+          this.ball.vel.set(Math.cos(releaseAngle) * releasePower, Math.sin(releaseAngle) * releasePower);
           this.room.broadcastEvent({
             type: 'sfx_hold_release',
             playerId: p1.id,
@@ -361,19 +360,27 @@ export class PuckMode extends BaseMode {
             y: this.ball.pos.y
           });
         } else {
-          // Glued to front of player
-          let dirX = p1.vel.x;
-          let dirY = p1.vel.y;
-          if (Math.hypot(dirX, dirY) < 0.2) {
-            dirX = (this.ball.pos.x - p1.pos.x);
-            dirY = (this.ball.pos.y - p1.pos.y);
+          // Smooth Angular Dribble tracking (Eliminates left-right teleporting)
+          if (p1.holdAngle === undefined) {
+            p1.holdAngle = Math.atan2(this.ball.pos.y - p1.pos.y, this.ball.pos.x - p1.pos.x);
           }
-          const len = Math.hypot(dirX, dirY) || 1;
-          const targetDist = p1.radius + this.ball.radius + 2;
 
+          const speed = Math.hypot(p1.vel.x, p1.vel.y);
+          if (speed > 0.2) {
+            const targetAngle = Math.atan2(p1.vel.y, p1.vel.x);
+            let diff = (targetAngle - p1.holdAngle) % (Math.PI * 2);
+            if (diff < -Math.PI) diff += Math.PI * 2;
+            if (diff > Math.PI) diff -= Math.PI * 2;
+
+            // Smooth angular rotation around player's perimeter (max 18 rad/s)
+            const maxTurn = 18 * dt;
+            p1.holdAngle += Math.max(-maxTurn, Math.min(maxTurn, diff * 0.45));
+          }
+
+          const targetDist = p1.radius + this.ball.radius + 3;
           this.ball.pos.set(
-            p1.pos.x + (dirX / len) * targetDist,
-            p1.pos.y + (dirY / len) * targetDist
+            p1.pos.x + Math.cos(p1.holdAngle) * targetDist,
+            p1.pos.y + Math.sin(p1.holdAngle) * targetDist
           );
           this.ball.vel.set(p1.vel.x, p1.vel.y);
           p1.lastBallTouch = now;

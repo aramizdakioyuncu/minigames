@@ -209,14 +209,19 @@ export class PuckClientMode extends BaseClientMode {
     g.drawCircle(0, 0, 4);
     g.endFill();
 
+    // Goal Colors (Swapped in 2nd half when teams change sides!)
+    const isSecondHalf = s.matchPhase === 'second_half';
+    const leftGoalColor = isSecondHalf ? 0x60a5fa : 0xf87171;
+    const rightGoalColor = isSecondHalf ? 0xf87171 : 0x60a5fa;
+
     // Left Goal Net & Area
-    g.lineStyle(2.5, 0xf87171, 0.9);
+    g.lineStyle(2.5, leftGoalColor, 0.95);
     g.drawRect(-hw - goalD, -goalH / 2, goalD, goalH);
     g.lineStyle(2, 0xffffff, 0.6);
     g.drawRect(-hw, -130, 110, 260); // Left Penalty Box
 
     // Right Goal Net & Area
-    g.lineStyle(2.5, 0x60a5fa, 0.9);
+    g.lineStyle(2.5, rightGoalColor, 0.95);
     g.drawRect(hw, -goalH / 2, goalD, goalH);
     g.lineStyle(2, 0xffffff, 0.6);
     g.drawRect(hw - 110, -130, 110, 260); // Right Penalty Box
