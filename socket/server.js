@@ -159,6 +159,19 @@ wss.on('connection', (ws) => {
 
         case 'chat': {
           if (currentRoom && data.text && playerRef) {
+            // In Space mode, chat is closed during active gameplay and only allowed during emergency meetings / lobby
+            if (currentRoom.modeType === 'space' && currentRoom.mode && currentRoom.mode.gameState === 'playing') {
+              send(ws, {
+                type: 'chat',
+                id: 'sys_' + Math.random().toString(36).substring(2, 7),
+                sender: 'Sistem',
+                text: '🤫 Uzay Casusunda oyun esnasında telsiz sessizliği geçerlidir! Sadece Acil Durum Toplantısında konuşabilirsiniz.',
+                color: '#ef4444',
+                time: Date.now()
+              });
+              break;
+            }
+
             const cleanText = data.text.trim().substring(0, 100);
             if (cleanText.length > 0) {
               currentRoom.broadcastChat(playerRef.name, cleanText, playerRef.color);

@@ -415,9 +415,11 @@ class GameApp {
       }
 
       if (e.key === 'Enter' && this.ui.currentView === 'view-game') {
-        if (document.activeElement !== this.ui.chatInput) {
-          e.preventDefault();
-          this.ui.chatInput.focus();
+        if (this.ui.hudChat && !this.ui.hudChat.classList.contains('hidden')) {
+          if (document.activeElement !== this.ui.chatInput) {
+            e.preventDefault();
+            this.ui.chatInput.focus();
+          }
         }
       } else if ((e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'Space') && !this.input.isChatting) {
         if (this.lastGameState && this.lastGameState.mode === 'space') {

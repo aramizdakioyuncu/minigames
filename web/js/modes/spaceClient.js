@@ -37,12 +37,14 @@ export class SpaceClientMode extends BaseClientMode {
     if (ui.hudSpace) ui.hudSpace.classList.remove('hidden');
     if (ui.hudLeaderboard) ui.hudLeaderboard.classList.add('hidden');
     if (ui.hudTeamSwitcher) ui.hudTeamSwitcher.classList.add('hidden');
+    if (ui.hudChat) ui.hudChat.classList.add('hidden');
   }
 
   onDeactivate(ui) {
     if (ui.hudSpace) ui.hudSpace.classList.add('hidden');
     if (ui.modalMeeting) ui.modalMeeting.classList.add('hidden');
     if (ui.modalTaskInteractive) ui.modalTaskInteractive.classList.add('hidden');
+    if (ui.hudChat) ui.hudChat.classList.remove('hidden');
   }
 
   renderEnvironment(renderer, g, gameState) {
@@ -259,6 +261,7 @@ export class SpaceClientMode extends BaseClientMode {
     if (ui.hudSpace) ui.hudSpace.classList.remove('hidden');
     if (ui.hudLeaderboard) ui.hudLeaderboard.classList.add('hidden');
     if (ui.hudTeamSwitcher) ui.hudTeamSwitcher.classList.add('hidden');
+    if (ui.hudChat) ui.hudChat.classList.add('hidden');
 
     const s = gameState.modeState || {};
     const myPlayer = (gameState.players || []).find(p => p.id === myPlayerId);

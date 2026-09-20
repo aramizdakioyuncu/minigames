@@ -131,6 +131,7 @@ export class UIController {
     this.btnTouchReport = document.getElementById('btn-touch-report');
 
     // Chat
+    this.hudChat = document.getElementById('hud-chat');
     this.chatMessages = document.getElementById('chat-messages');
     this.chatForm = document.getElementById('chat-form');
     this.chatInput = document.getElementById('chat-input');
