@@ -4,20 +4,20 @@ import { InputController } from './input.js';
 import { audio } from './audio.js';
 import { UIController } from './ui.js';
 import { clientModeRegistry } from './modes/clientModeRegistry.js';
+import { profileManager } from './auth/profileManager.js';
 
 class GameApp {
   constructor() {
+    this.profile = profileManager.getProfile();
     this.ui = new UIController();
     this.socket = new SocketClient();
     this.input = new InputController();
     this.canvas = document.getElementById('game-canvas');
     this.renderer = new GameRenderer(this.canvas);
 
-    this.profile = {
-      name: localStorage.getItem('ball_name') || '',
-      avatar: localStorage.getItem('ball_avatar') || '⚽',
-      color: localStorage.getItem('ball_color') || '#3b82f6'
-    };
+    profileManager.onUpdate((p) => {
+      this.profile = p;
+    });
 
     this.currentRoom = null;
     this.lastGameState = null;
@@ -79,7 +79,7 @@ class GameApp {
         avatarBtns.forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
         this.profile.avatar = btn.dataset.avatar;
-        localStorage.setItem('ball_avatar', this.profile.avatar);
+        profileManager.updateCustomization(this.profile.avatar, this.profile.color, this.profile.name);
       });
     });
 
@@ -94,7 +94,7 @@ class GameApp {
         colorBtns.forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
         this.profile.color = btn.dataset.color;
-        localStorage.setItem('ball_color', this.profile.color);
+        profileManager.updateCustomization(this.profile.avatar, this.profile.color, this.profile.name);
       });
     });
 
@@ -102,8 +102,8 @@ class GameApp {
     this.ui.btnEnterLobby.addEventListener('click', () => {
       audio.init();
       const rawName = this.ui.inputNickname.value.trim();
-      this.profile.name = rawName.length > 0 ? rawName : 'Oyuncu_' + Math.floor(Math.random() * 900 + 100);
-      localStorage.setItem('ball_name', this.profile.name);
+      const name = rawName.length > 0 ? rawName : 'Oyuncu_' + Math.floor(Math.random() * 900 + 100);
+      profileManager.updateCustomization(this.profile.avatar, this.profile.color, name);
 
       this.ui.lobbyUserName.textContent = this.profile.name;
       this.ui.lobbyUserAvatar.textContent = this.profile.avatar;
@@ -127,6 +127,37 @@ class GameApp {
     // Refresh rooms
     this.ui.btnRefreshRooms.addEventListener('click', () => {
       this.socket.send({ type: 'get_rooms' });
+    });
+
+    // Mode Carousel Card Direct Quick Filter & Play
+    const carouselCards = document.querySelectorAll('.mode-card');
+    carouselCards.forEach(card => {
+      card.addEventListener('click', () => {
+        let modeId = 'puck';
+        if (card.classList.contains('card-space')) modeId = 'space';
+        else if (card.classList.contains('card-vampire')) modeId = 'vampire';
+        else if (card.classList.contains('card-conquest')) modeId = 'conquest';
+        else if (card.classList.contains('card-sumo')) modeId = 'sumo';
+        else if (card.classList.contains('card-agar')) modeId = 'agar';
+        else if (card.classList.contains('card-puck')) modeId = 'puck';
+
+        // Select the matching filter tab
+        filterBtns.forEach(b => {
+          b.classList.toggle('active', b.dataset.filter === modeId);
+        });
+        this.ui.activeFilter = modeId;
+        this.socket.send({ type: 'get_rooms' });
+
+        if (window.audio && typeof window.audio.playClick === 'function') {
+          window.audio.playClick();
+        }
+
+        // Smooth scroll to rooms container
+        const roomsContainer = document.querySelector('.rooms-container');
+        if (roomsContainer) {
+          roomsContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      });
     });
 
     // Audio Toggle
@@ -178,10 +209,22 @@ class GameApp {
       });
     });
 
+    // Map Theme Radio Selection
+    const mapCards = document.querySelectorAll('.map-radio-card');
+    mapCards.forEach(card => {
+      card.addEventListener('click', (e) => {
+        mapCards.forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        const input = card.querySelector('input');
+        if (input) input.checked = true;
+      });
+    });
+
     // Create Room Submit
     this.ui.btnSubmitCreateRoom.addEventListener('click', () => {
       const name = this.ui.createRoomName.value.trim() || `${this.profile.name}'in Odası`;
       const selectedMode = document.querySelector('input[name="create-room-mode"]:checked')?.value || 'puck';
+      const selectedMap = document.querySelector('input[name="create-room-map"]:checked')?.value || 'spaceship';
       const selectedSpeed = parseFloat(document.querySelector('input[name="create-room-speed"]:checked')?.value || '1.0');
       const maxPlayers = parseInt(this.ui.createMaxPlayers.value) || 8;
       const matchDuration = parseInt(document.getElementById('create-match-time')?.value || '180');
@@ -191,6 +234,7 @@ class GameApp {
         type: 'create_room',
         roomName: name,
         mode: selectedMode,
+        mapTheme: selectedMap,
         speedMultiplier: selectedSpeed,
         matchDuration,
         tackleEnabled,
@@ -423,6 +467,50 @@ class GameApp {
       });
     }
 
+    // Space Sabotage Buttons
+    const btnSpaceSabotage = document.getElementById('btn-space-sabotage');
+    if (btnSpaceSabotage) {
+      btnSpaceSabotage.addEventListener('click', () => {
+        const spaceMode = clientModeRegistry.getMode('space');
+        if (spaceMode && spaceMode.toggleSabotageModal) {
+          spaceMode.toggleSabotageModal(this.ui, this.lastGameState, this.socket.myPlayerId);
+        }
+      });
+    }
+
+    const btnCloseSpaceSabotage = document.getElementById('btn-close-space-sabotage');
+    if (btnCloseSpaceSabotage) {
+      btnCloseSpaceSabotage.addEventListener('click', () => {
+        const modal = document.getElementById('modal-space-sabotage');
+        if (modal) modal.classList.add('hidden');
+      });
+    }
+
+    const btnSabotageLights = document.getElementById('btn-sabotage-lights');
+    if (btnSabotageLights) {
+      btnSabotageLights.addEventListener('click', () => {
+        this.socket.sendAction({ type: 'sabotage', sabotageType: 'lights' });
+        const modal = document.getElementById('modal-space-sabotage');
+        if (modal) modal.classList.add('hidden');
+      });
+    }
+
+    const btnSabotageDoors = document.getElementById('btn-sabotage-doors');
+    if (btnSabotageDoors) {
+      btnSabotageDoors.addEventListener('click', () => {
+        this.socket.sendAction({ type: 'sabotage', sabotageType: 'doors' });
+        const modal = document.getElementById('modal-space-sabotage');
+        if (modal) modal.classList.add('hidden');
+      });
+    }
+
+    const btnFixShortcut = document.getElementById('btn-fix-sabotage-shortcut');
+    if (btnFixShortcut) {
+      btnFixShortcut.addEventListener('click', () => {
+        this.socket.sendAction({ type: 'fix_sabotage', sabotageType: 'lights' });
+      });
+    }
+
     // Keyboard Hotkeys
     window.addEventListener('keydown', (e) => {
       if (this.ui.modalMeeting && !this.ui.modalMeeting.classList.contains('hidden')) {
@@ -437,6 +525,11 @@ class GameApp {
       }
 
       if (e.key === 'Escape' && this.ui.currentView === 'view-game') {
+        const sabotageModal = document.getElementById('modal-space-sabotage');
+        if (sabotageModal && !sabotageModal.classList.contains('hidden')) {
+          sabotageModal.classList.add('hidden');
+          return;
+        }
         const minimapModal = document.getElementById('modal-space-minimap');
         if (minimapModal && !minimapModal.classList.contains('hidden')) {
           minimapModal.classList.add('hidden');
@@ -445,11 +538,22 @@ class GameApp {
         // If task interactive modal open, close it
         if (this.ui.modalTaskInteractive && !this.ui.modalTaskInteractive.classList.contains('hidden')) {
           this.ui.closeTaskMiniGame();
+          this.socket.sendAction({ type: 'stop_task' });
           return;
         }
         this.ui.toggleEscMenu();
         this.ui.updateEscMenu(this.lastGameState, this.socket.myPlayerId, this.currentRoom);
         return;
+      }
+
+      if ((e.code === 'KeyQ') && !this.input.isChatting && this.ui.currentView === 'view-game') {
+        if (this.lastGameState && this.lastGameState.mode === 'space') {
+          const spaceMode = clientModeRegistry.getMode('space');
+          if (spaceMode && spaceMode.toggleSabotageModal) {
+            spaceMode.toggleSabotageModal(this.ui, this.lastGameState, this.socket.myPlayerId);
+            return;
+          }
+        }
       }
 
       if ((e.code === 'KeyM') && !this.input.isChatting && this.ui.currentView === 'view-game') {
@@ -485,6 +589,9 @@ class GameApp {
   }
 
   checkSpaceTaskInteraction() {
+    this.ui.onTaskClosedCallback = () => {
+      this.socket.sendAction({ type: 'stop_task' });
+    };
     const activeMode = clientModeRegistry.getActiveMode();
     if (activeMode && activeMode.checkTaskInteraction) {
       activeMode.checkTaskInteraction(this);
@@ -693,15 +800,40 @@ class GameApp {
             this.ui.showEjectionScreen(evt.ejected, evt.isTie, evt.isSkip, evt.message);
           } else if (evt.type === 'game_over') {
             const winTitle = evt.winner === 'impostor'
-              ? '🚨 Casuslar Kazandı!'
-              : (evt.winner === 'vampires'
-                ? '🩸 Vampirler Kazandı!'
-                : (evt.winner === 'villagers'
-                  ? '🏰 Köylüler Kazandı!'
-                  : (evt.winnerName
-                    ? `👑 ${evt.winnerName} Haritayı Fethetti!`
-                    : '✨ Oyun Bitti!')));
-            this.ui.showGoalBanner('🏆 OYUN BİTTİ!', winTitle);
+              ? '🔪 Casuslar Kazandı!'
+              : (evt.winner === 'crew'
+                ? '🛠️ Mürettebat Kazandı! (Tüm Görevler Tamamlandı)'
+                : (evt.winner === 'vampires'
+                  ? '🩸 Vampirler Kazandı!'
+                  : (evt.winner === 'villagers'
+                    ? '🏰 Köylüler Kazandı!'
+                    : (evt.winnerName
+                      ? `👑 ${evt.winnerName} Haritayı Fethetti!`
+                      : '✨ Oyun Bitti!'))));
+            audio.playGoal();
+            this.ui.showGoalBanner('🏆 OYUN BİTTİ!', evt.message || winTitle);
+
+            // Record XP and Match Stats Progression
+            const myP = (state.players || []).find(p => p.id === this.socket.myPlayerId);
+            let isWinner = false;
+            if (state.mode === 'puck') {
+              isWinner = (evt.winner === 'red' && myP?.team === 'red') || (evt.winner === 'blue' && myP?.team === 'blue');
+            } else if (state.mode === 'space') {
+              isWinner = (evt.winner === 'impostor' && myP?.role === 'impostor') || (evt.winner === 'crew' && myP?.role !== 'impostor');
+            } else if (state.mode === 'vampire') {
+              isWinner = (evt.winner === 'vampires' && this.myVampireRole === 'vampire') || (evt.winner === 'villagers' && this.myVampireRole !== 'vampire');
+            } else if (state.mode === 'conquest') {
+              isWinner = (evt.winnerName && myP && evt.winnerName === myP.name);
+            }
+
+            const recordResult = profileManager.recordMatchResult({
+              won: isWinner,
+              mode: state.mode || 'puck'
+            });
+
+            setTimeout(() => {
+              this.ui.showToast(`⭐ +${recordResult.xpEarned} XP Kazanıldı! (${recordResult.won ? '🏆 Zafer Bonusu' : '🎮 Maç Katılımı'})`);
+            }, 1200);
           } else if (evt.type === 'conquest_question') {
             audio.playConquestHorn();
             this.ui.openConquestQuestionModal(evt, evt.timer || 15, (answer) => {

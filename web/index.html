@@ -30,6 +30,24 @@
           <p class="brand-subtitle">Çok Oyunculu Web Oyunları Platformu</p>
         </div>
 
+        <!-- Social Login Action Buttons -->
+        <div class="social-login-group">
+          <button id="btn-login-google" class="btn btn-social btn-google">
+            <span class="social-icon">🔴</span>
+            <span>Google ile Giriş Yap</span>
+            <span class="bonus-badge">+100 XP</span>
+          </button>
+          <button id="btn-login-facebook" class="btn btn-social btn-facebook">
+            <span class="social-icon">🔵</span>
+            <span>Facebook ile Giriş Yap</span>
+            <span class="bonus-badge">+100 XP</span>
+          </button>
+        </div>
+
+        <div class="auth-divider">
+          <span>veya Misafir / Takma Ad ile Oyna</span>
+        </div>
+
         <div class="form-group">
           <label for="input-nickname">Oyuncu Takma Adı</label>
           <div class="input-wrapper">
@@ -49,6 +67,10 @@
             <button class="avatar-option" data-avatar="🎯">🎯</button>
             <button class="avatar-option" data-avatar="🐺">🐺</button>
             <button class="avatar-option" data-avatar="🚀">🚀</button>
+            <button class="avatar-option" data-avatar="💎">💎</button>
+            <button class="avatar-option" data-avatar="🐉">🐉</button>
+            <button class="avatar-option" data-avatar="🏆">🏆</button>
+            <button class="avatar-option" data-avatar="🌌">🌌</button>
           </div>
         </div>
 
@@ -86,12 +108,22 @@
           <h2>ARMOYU<span class="highlight"> MiniGames</span></h2>
         </div>
 
-        <div class="user-chip">
+        <!-- User Profile & Level Widget (Clickable to open profile) -->
+        <div class="user-chip" id="lobby-user-chip" title="Profil & İstatistikleri Aç">
           <span class="user-avatar-badge" id="lobby-user-avatar">⚽</span>
-          <span class="user-name-text" id="lobby-user-name">Oyuncu</span>
+          <div class="user-info-stack">
+            <div class="user-name-line">
+              <span class="user-name-text" id="lobby-user-name">Oyuncu</span>
+              <span class="level-badge-pill" id="lobby-user-level-badge">Lv.1</span>
+            </div>
+            <div class="xp-bar-container">
+              <div class="xp-bar-fill" id="lobby-user-xp-bar" style="width: 0%;"></div>
+            </div>
+          </div>
         </div>
 
         <div class="header-actions">
+          <button id="btn-open-profile-modal" class="btn btn-secondary btn-sm" title="Profilim">👤 Profil</button>
           <button id="btn-sound-toggle" class="btn-icon" title="Sesi Aç/Kapat">🔊</button>
           <button id="btn-open-create-room" class="btn btn-success">
             <span>+ Yeni Oda Kur</span>
@@ -205,6 +237,27 @@
               <input type="radio" name="create-room-mode" value="conquest">
               <span class="mode-radio-icon">🏰</span>
               <span class="mode-radio-title">Bil ve Fethet</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" id="group-map-theme">
+          <label>Mekan & Harita Tasarımı (Modüler Mimari)</label>
+          <div class="map-select-grid">
+            <label class="map-radio-card selected">
+              <input type="radio" name="create-room-map" value="spaceship" checked>
+              <span class="map-icon">🚀</span>
+              <span class="map-title">Uzay Gemisi</span>
+            </label>
+            <label class="map-radio-card">
+              <input type="radio" name="create-room-map" value="castle">
+              <span class="map-icon">🏰</span>
+              <span class="map-title">Ortaçağ Kalesi</span>
+            </label>
+            <label class="map-radio-card">
+              <input type="radio" name="create-room-map" value="mansion">
+              <span class="map-icon">🏚️</span>
+              <span class="map-title">Karanlık Malikane</span>
             </label>
           </div>
         </div>
@@ -323,8 +376,16 @@
           </div>
           <div class="space-hud-actions">
             <div class="space-role-pill" id="space-role-badge">🛠️ MÜRETTEBAT</div>
+            <button class="btn btn-sm btn-danger space-sabotage-btn hidden" id="btn-space-sabotage" title="Sabotaj Yap (Q)">🚨 Sabotaj (Q)</button>
             <button class="btn btn-sm btn-secondary space-map-btn" id="btn-space-minimap" title="Harita (M)">🗺️ Harita (M)</button>
           </div>
+        </div>
+
+        <!-- Space Sabotage Active Warning Banner -->
+        <div class="space-sabotage-banner hidden" id="space-sabotage-banner">
+          <div class="sabotage-banner-icon">🚨</div>
+          <div class="sabotage-banner-text" id="space-sabotage-text">ELEKTRİK KESİNTİSİ!</div>
+          <button class="btn btn-sm btn-warning" id="btn-fix-sabotage-shortcut" title="Elektrik Odasına Git">⚡ Elektrik Şalteri (⚡)</button>
         </div>
       </div>
 
@@ -502,6 +563,53 @@
             <div class="minimap-legend-item"><span class="legend-dot dot-vent"></span> <b>🌀</b> Havalandırmalar</div>
             <span class="minimap-hint-key">Kapatmak için <b>M</b> veya <b>ESC</b></span>
           </div>
+        </div>
+      </div>
+
+      <!-- 7.5 HOLOGRAPHIC SPACE SABOTAGE MODAL (Impostor Only) -->
+      <div id="modal-space-sabotage" class="modal-overlay hidden">
+        <div class="glass-card space-sabotage-card">
+          <div class="space-sabotage-header">
+            <div class="space-sabotage-title">
+              <span class="sabotage-title-icon">🚨</span>
+              <h3>GEMİ SABOTAJ MERKEZİ (CASUS)</h3>
+            </div>
+            <button class="btn-close" id="btn-close-space-sabotage">✕</button>
+          </div>
+          <p class="sabotage-desc">Gemide kaos yaratarak mürettebatı dağıt ve avlanmayı kolaylaştır.</p>
+          
+          <div class="sabotage-cards-grid">
+            <!-- 1. Elektrik Kes -->
+            <div class="sabotage-action-card" id="card-sabotage-lights">
+              <div class="sabotage-card-top">
+                <span class="sabotage-big-icon">⚡</span>
+                <div class="sabotage-texts">
+                  <h4>Elektrik Kes (Işıklar Sönsün)</h4>
+                  <p>Mürettebatın görüş alanını 20 saniyeliğine karartır. Sen karanlıkta net görürsün!</p>
+                </div>
+              </div>
+              <button class="btn btn-danger btn-block btn-trigger-sabotage" id="btn-sabotage-lights">
+                <span>⚡ Elektriği Kes</span>
+                <span class="sabotage-cd-badge" id="cd-sabotage-lights"></span>
+              </button>
+            </div>
+
+            <!-- 2. Kapıları Kilitle -->
+            <div class="sabotage-action-card" id="card-sabotage-doors">
+              <div class="sabotage-card-top">
+                <span class="sabotage-big-icon">🔒</span>
+                <div class="sabotage-texts">
+                  <h4>Hava Kilitlerini Kapat (Kapıları Kilitle)</h4>
+                  <p>Tüm oda kapılarını 10 saniye boyunca kilitler. Kimse kapılardan geçemez!</p>
+                </div>
+              </div>
+              <button class="btn btn-danger btn-block btn-trigger-sabotage" id="btn-sabotage-doors">
+                <span>🔒 Kapıları Kilitle</span>
+                <span class="sabotage-cd-badge" id="cd-sabotage-doors"></span>
+              </button>
+            </div>
+          </div>
+          <div class="sabotage-footer-hint">Kapatmak için <b>Q</b> veya <b>ESC</b></div>
         </div>
       </div>
 
@@ -745,17 +853,17 @@
           <div class="esc-actions-group">
             <!-- Host Direct Start/Stop Match Button -->
             <button id="btn-host-toggle-match" class="btn btn-primary btn-block hidden">
-              ⚽ Maçı Başlat (Host)
+              🎮 Oyunu Başlat (Host)
             </button>
 
             <!-- Host Direct Restart Button -->
             <button id="btn-host-restart" class="btn btn-secondary btn-block hidden">
-              🔄 Maçı Sıfırla (Host)
+              🔄 Oyunu Sıfırla (Host)
             </button>
 
             <!-- Player Vote Restart Button -->
             <button id="btn-player-vote-restart" class="btn btn-warning btn-block">
-              🗳️ Maçı Yeniden Başlatma Oyu Ver <span id="esc-restart-vote-count">(0/0)</span>
+              🗳️ Oyunu Başlatma Oyu Ver <span id="esc-restart-vote-count">(0/0)</span>
             </button>
 
             <!-- Audio Toggle -->
@@ -805,6 +913,88 @@
         <span id="hint-hold">🧲 <b>Shift / E / Sağ Tık:</b> Top Tutma</span>
         <span id="hint-extra" class="hidden"></span>
         <span>💬 <b>Enter:</b> Sohbet</span>
+      </div>
+    </div>
+
+    <!-- Profile & Level Progression Dashboard Modal (Global) -->
+    <div id="modal-profile-dashboard" class="modal-backdrop hidden">
+      <div class="glass-card profile-dash-card">
+        <div class="dash-header">
+          <div class="dash-title-group">
+            <span class="dash-icon">👤</span>
+            <h2>OYUNCU PROFİLİ & İSTATİSTİKLER</h2>
+          </div>
+          <button class="btn-icon" id="btn-close-profile-modal" title="Kapat">✕</button>
+        </div>
+
+        <!-- Player Identity Banner -->
+        <div class="profile-dash-hero">
+          <div class="dash-avatar-circle" id="modal-dash-avatar">⚽</div>
+          <div class="dash-hero-info">
+            <div class="dash-hero-name-row">
+              <h3 id="modal-dash-name">Oyuncu</h3>
+              <span id="modal-dash-auth-status"><span class="status-badge guest">👤 Misafir</span></span>
+            </div>
+            <div class="dash-rank-title" id="modal-dash-rank">🌱 Acemi Çaylak</div>
+            
+            <!-- Level & XP Bar -->
+            <div class="dash-level-row">
+              <span class="dash-level-text" id="modal-dash-level">Seviye 1</span>
+              <span class="dash-xp-text" id="modal-dash-xp-text">0 / 100 XP (%0)</span>
+            </div>
+            <div class="dash-xp-track">
+              <div class="dash-xp-fill" id="modal-dash-xp-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Match Statistics Grid -->
+        <div class="dash-section-title">📊 MAÇ İSTATİSTİKLERİ</div>
+        <div class="dash-stats-grid">
+          <div class="dash-stat-box">
+            <div class="stat-icon">🏆</div>
+            <div class="stat-val" id="stat-dash-wins">0</div>
+            <div class="stat-label">Toplam Zafer</div>
+          </div>
+          <div class="dash-stat-box">
+            <div class="stat-icon">🎮</div>
+            <div class="stat-val" id="stat-dash-matches">0</div>
+            <div class="stat-label">Oynanan Maç</div>
+          </div>
+          <div class="dash-stat-box">
+            <div class="stat-icon">📈</div>
+            <div class="stat-val" id="stat-dash-winrate">%0</div>
+            <div class="stat-label">Kazanma Oranı</div>
+          </div>
+          <div class="dash-stat-box">
+            <div class="stat-icon">⚽</div>
+            <div class="stat-val" id="stat-dash-goals">0</div>
+            <div class="stat-label">Goller</div>
+          </div>
+          <div class="dash-stat-box">
+            <div class="stat-icon">🚀</div>
+            <div class="stat-val" id="stat-dash-tasks">0</div>
+            <div class="stat-label">Görevler</div>
+          </div>
+          <div class="dash-stat-box">
+            <div class="stat-icon">🏰</div>
+            <div class="stat-val" id="stat-dash-conquests">0</div>
+            <div class="stat-label">Fetihler</div>
+          </div>
+          <div class="dash-stat-box stat-xp-box">
+            <div class="stat-icon">⭐</div>
+            <div class="stat-val" id="stat-dash-total-xp">0</div>
+            <div class="stat-label">Kazanılan XP</div>
+          </div>
+        </div>
+
+        <!-- Account Connection & Actions -->
+        <div class="dash-section-title">🔐 HESAP BAĞLANTISI</div>
+        <div class="dash-account-actions">
+          <button id="btn-profile-logout" class="btn btn-secondary btn-sm">
+            <span>🚪 Yeni Misafir Oluştur / Sıfırla</span>
+          </button>
+        </div>
       </div>
     </div>
 

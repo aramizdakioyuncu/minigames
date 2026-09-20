@@ -68,7 +68,7 @@ export class InputController {
       if (code === 'KeyS' || code === 'ArrowDown' || key === 's' || key === 'arrowdown') this.keys.down = true;
       if (code === 'KeyA' || code === 'ArrowLeft' || key === 'a' || key === 'arrowleft') this.keys.left = true;
       if (code === 'KeyD' || code === 'ArrowRight' || key === 'd' || key === 'arrowright') this.keys.right = true;
-      if (code === 'Space' || code === 'KeyX' || code === 'KeyQ' || key === ' ' || key === 'x' || key === 'q') this.keys.kick = true;
+      if (code === 'Space' || code === 'KeyX' || key === ' ' || key === 'x') this.keys.kick = true;
       if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyE' || code === 'KeyC' || code === 'KeyF' || key === 'shift' || key === 'e' || key === 'c' || key === 'f') {
         this.keys.hold = true;
         this.keys.use = true;
@@ -85,7 +85,7 @@ export class InputController {
       if (code === 'KeyS' || code === 'ArrowDown' || key === 's' || key === 'arrowdown') this.keys.down = false;
       if (code === 'KeyA' || code === 'ArrowLeft' || key === 'a' || key === 'arrowleft') this.keys.left = false;
       if (code === 'KeyD' || code === 'ArrowRight' || key === 'd' || key === 'arrowright') this.keys.right = false;
-      if (code === 'Space' || code === 'KeyX' || code === 'KeyQ' || key === ' ' || key === 'x' || key === 'q') this.keys.kick = false;
+      if (code === 'Space' || code === 'KeyX' || key === ' ' || key === 'x') this.keys.kick = false;
       if (code === 'ShiftLeft' || code === 'ShiftRight' || code === 'KeyE' || code === 'KeyC' || code === 'KeyF' || key === 'shift' || key === 'e' || key === 'c' || key === 'f') {
         this.keys.hold = false;
         this.keys.use = false;
@@ -252,11 +252,12 @@ export class InputController {
   }
 
   getState() {
+    const isDoingTask = document.getElementById('modal-task-interactive') && !document.getElementById('modal-task-interactive').classList.contains('hidden');
     return {
-      up: this.keys.up,
-      down: this.keys.down,
-      left: this.keys.left,
-      right: this.keys.right,
+      up: isDoingTask ? false : this.keys.up,
+      down: isDoingTask ? false : this.keys.down,
+      left: isDoingTask ? false : this.keys.left,
+      right: isDoingTask ? false : this.keys.right,
       kick: this.keys.kick,
       hold: this.keys.hold,
       vent: this.keys.vent,

@@ -1,16 +1,19 @@
 import { Vec2, resolveCircleCollision, resolveSegmentCollision } from '../physics.js';
 import { configDb } from '../../db/configDb.js';
 import { BaseMode } from './BaseMode.js';
+import { mapRegistry } from './maps/mapRegistry.js';
 
 export class SpaceMode extends BaseMode {
-  constructor(room) {
+  constructor(room, options = {}) {
     super(room);
     this.type = 'space';
     this.name = 'Uzay Casusu (Spaceship Infiltration)';
 
-    // Spaceship Map Dimensions (Bigger Map)
+    // Spaceship Map Dimensions
     this.width = 2800;
     this.height = 1800;
+
+    this.mapTheme = options.mapTheme || (room && room.options && room.options.mapTheme) || 'spaceship';
 
     this.gameState = 'waiting'; // 'waiting' (Lobi Serbest Dolaşma), 'playing', 'meeting', 'game_over'
     this.meetingTimer = 0;
@@ -23,137 +26,32 @@ export class SpaceMode extends BaseMode {
     this.bodies = []; // Array of { id, x, y, color, avatar, name, killerId }
     this.votes = new Map(); // voterId -> targetId ('skip' or playerId)
 
-    this.initMap();
-    this.initDoors();
-    this.initCorridors();
-    this.initVents();
-    this.initTaskStations();
+    // Impostor Sabotage System
+    this.sabotage = {
+      type: null, // null, 'lights', 'doors'
+      active: false,
+      timer: 0,
+      duration: 0,
+      cooldown: 0
+    };
+
+    this.loadMapLayout();
   }
 
-  initMap() {
+  loadMapLayout() {
     const hw = this.width / 2;
     const hh = this.height / 2;
+    const mapData = mapRegistry.getMap(this.mapTheme, hw, hh);
 
-    // Outer spaceship hull & internal architectural walls
-    this.walls = [
-      // Outer Ship Hull
-      { p1: new Vec2(-hw, -hh), p2: new Vec2(hw, -hh) },
-      { p1: new Vec2(-hw, hh), p2: new Vec2(hw, hh) },
-      { p1: new Vec2(-hw, -hh), p2: new Vec2(-hw, hh) },
-      { p1: new Vec2(hw, -hh), p2: new Vec2(hw, hh) },
-
-      // Cafeteria (Center / Toplantı Masası) Walls with Wide Doorway Openings
-      { p1: new Vec2(-340, -300), p2: new Vec2(-100, -300) },
-      { p1: new Vec2(100, -300), p2: new Vec2(340, -300) },
-      { p1: new Vec2(-340, 240), p2: new Vec2(-100, 240) },
-      { p1: new Vec2(100, 240), p2: new Vec2(340, 240) },
-      { p1: new Vec2(-340, -300), p2: new Vec2(-340, -80) },
-      { p1: new Vec2(-340, 80), p2: new Vec2(-340, 240) },
-      { p1: new Vec2(340, -300), p2: new Vec2(340, -80) },
-      { p1: new Vec2(340, 80), p2: new Vec2(340, 240) },
-
-      // Reactor & Engine (Left Room)
-      { p1: new Vec2(-1150, -450), p2: new Vec2(-680, -450) },
-      { p1: new Vec2(-680, -450), p2: new Vec2(-680, -100) },
-      { p1: new Vec2(-680, 100), p2: new Vec2(-680, 450) },
-      { p1: new Vec2(-1150, 450), p2: new Vec2(-680, 450) },
-
-      // Electrical (Bottom Left)
-      { p1: new Vec2(-950, 360), p2: new Vec2(-520, 360) },
-      { p1: new Vec2(-520, 360), p2: new Vec2(-520, 750) },
-
-      // Cockpit / Navigation (Right Room)
-      { p1: new Vec2(700, -450), p2: new Vec2(1180, -450) },
-      { p1: new Vec2(700, -450), p2: new Vec2(700, -100) },
-      { p1: new Vec2(700, 100), p2: new Vec2(700, 450) },
-      { p1: new Vec2(700, 450), p2: new Vec2(1180, 450) },
-
-      // MedBay / Revir (Top Room)
-      { p1: new Vec2(-300, -780), p2: new Vec2(300, -780) },
-      { p1: new Vec2(-300, -780), p2: new Vec2(-300, -460) },
-      { p1: new Vec2(300, -780), p2: new Vec2(300, -460) },
-
-      // Security / Kalkan (Bottom Room)
-      { p1: new Vec2(-280, 460), p2: new Vec2(280, 460) },
-      { p1: new Vec2(-280, 460), p2: new Vec2(-280, 780) },
-      { p1: new Vec2(280, 460), p2: new Vec2(280, 780) },
-
-      // O2 / Yaşam Destek (Top Right Room)
-      { p1: new Vec2(520, -750), p2: new Vec2(920, -750) },
-      { p1: new Vec2(520, -750), p2: new Vec2(520, -480) },
-      { p1: new Vec2(920, -750), p2: new Vec2(920, -480) },
-
-      // Storage / Depo (Bottom Right Room)
-      { p1: new Vec2(500, 460), p2: new Vec2(950, 460) },
-      { p1: new Vec2(500, 460), p2: new Vec2(500, 800) },
-      { p1: new Vec2(950, 460), p2: new Vec2(950, 800) }
-    ];
-
-    // Room Label Zones for Mini-Map and Fog vision
-    this.roomsList = [
-      { id: 'cafeteria', name: 'Kafeterya (Merkez)', x: 0, y: -30, w: 640, h: 500, icon: '☕' },
-      { id: 'reactor', name: 'Reaktör & Motor Odası', x: -910, y: 0, w: 420, h: 840, icon: '⚛️' },
-      { id: 'electrical', name: 'Elektrik & Jeneratör', x: -730, y: 550, w: 400, h: 360, icon: '⚡' },
-      { id: 'medbay', name: 'Revir (MedBay Tarama)', x: 0, y: -620, w: 560, h: 280, icon: '💊' },
-      { id: 'cockpit', name: 'Kokpit & Seyir / Navigasyon', x: 940, y: 0, w: 440, h: 840, icon: '🚀' },
-      { id: 'security', name: 'Güvenlik & Kalkan', x: 0, y: 620, w: 520, h: 300, icon: '🛡️' },
-      { id: 'o2', name: 'O2 & Yaşam Destek', x: 720, y: -610, w: 380, h: 260, icon: '🍃' },
-      { id: 'storage', name: 'Depo & Kargo Bölümü', x: 720, y: 630, w: 420, h: 320, icon: '📦' }
-    ];
-  }
-
-  initDoors() {
-    this.doors = [
-      { id: 'door_cafe_north', name: 'Kafeterya Kuzey Kapısı', x: 0, y: -300, w: 200, h: 28, orientation: 'h', isOpen: false, openTimer: 0 },
-      { id: 'door_cafe_south', name: 'Kafeterya Güney Kapısı', x: 0, y: 240, w: 200, h: 28, orientation: 'h', isOpen: false, openTimer: 0 },
-      { id: 'door_cafe_west', name: 'Kafeterya Batı Kapısı', x: -340, y: 0, w: 28, h: 160, orientation: 'v', isOpen: false, openTimer: 0 },
-      { id: 'door_cafe_east', name: 'Kafeterya Doğu Kapısı', x: 340, y: 0, w: 28, h: 160, orientation: 'v', isOpen: false, openTimer: 0 },
-      { id: 'door_medbay', name: 'Revir Kapısı', x: 0, y: -460, w: 180, h: 28, orientation: 'h', isOpen: false, openTimer: 0 },
-      { id: 'door_security', name: 'Güvenlik Kapısı', x: 0, y: 460, w: 180, h: 28, orientation: 'h', isOpen: false, openTimer: 0 },
-      { id: 'door_reactor', name: 'Reaktör Kapısı', x: -680, y: 0, w: 28, h: 200, orientation: 'v', isOpen: false, openTimer: 0 },
-      { id: 'door_cockpit', name: 'Kokpit Kapısı', x: 700, y: 0, w: 28, h: 200, orientation: 'v', isOpen: false, openTimer: 0 },
-      { id: 'door_electrical', name: 'Elektrik Kapısı', x: -520, y: 550, w: 28, h: 160, orientation: 'v', isOpen: false, openTimer: 0 },
-      { id: 'door_storage', name: 'Depo Kapısı', x: 500, y: 630, w: 28, h: 160, orientation: 'v', isOpen: false, openTimer: 0 },
-      { id: 'door_o2', name: 'O2 Kapısı', x: 520, y: -610, w: 28, h: 140, orientation: 'v', isOpen: false, openTimer: 0 }
-    ];
-  }
-
-  initCorridors() {
-    this.corridors = [
-      { id: 'corr_north', name: 'Kuzey Koridoru (Revir Yolu)', x: 0, y: -380, w: 200, h: 160 },
-      { id: 'corr_south', name: 'Güney Koridoru (Güvenlik Yolu)', x: 0, y: 350, w: 200, h: 160 },
-      { id: 'corr_west', name: 'Batı Ana Koridoru (Reaktör Yolu)', x: -510, y: 0, w: 340, h: 160 },
-      { id: 'corr_east', name: 'Doğu Ana Koridoru (Kokpit Yolu)', x: 520, y: 0, w: 360, h: 160 },
-      { id: 'corr_ne', name: 'Kuzeydoğu Koridoru (O2 Geçişi)', x: 430, y: -450, w: 180, h: 180 },
-      { id: 'corr_se', name: 'Güneydoğu Koridoru (Depo Geçişi)', x: 420, y: 450, w: 180, h: 180 },
-      { id: 'corr_sw', name: 'Güneybatı Koridoru (Elektrik Geçişi)', x: -430, y: 450, w: 180, h: 180 }
-    ];
-  }
-
-  initVents() {
-    // Interconnected Vents for Impostor (Expanded Ship Map)
-    this.vents = [
-      { id: 'vent_elec', room: 'electrical', x: -750, y: 580, connectsTo: ['vent_react', 'vent_sec'] },
-      { id: 'vent_react', room: 'reactor', x: -940, y: -260, connectsTo: ['vent_elec', 'vent_med'] },
-      { id: 'vent_med', room: 'medbay', x: -180, y: -640, connectsTo: ['vent_react', 'vent_cafe'] },
-      { id: 'vent_cafe', room: 'cafeteria', x: 250, y: -220, connectsTo: ['vent_med', 'vent_o2'] },
-      { id: 'vent_o2', room: 'o2', x: 760, y: -620, connectsTo: ['vent_cafe', 'vent_cockpit'] },
-      { id: 'vent_cockpit', room: 'cockpit', x: 960, y: -240, connectsTo: ['vent_o2', 'vent_storage'] },
-      { id: 'vent_storage', room: 'storage', x: 760, y: 640, connectsTo: ['vent_cockpit', 'vent_sec'] },
-      { id: 'vent_sec', room: 'security', x: 160, y: 640, connectsTo: ['vent_storage', 'vent_elec'] }
-    ];
-  }
-
-  initTaskStations() {
-    // Distributed Tasks around the expanded starship
-    this.taskStations = [
-      { id: 'task_wires_elec', room: 'electrical', name: '⚡ Kabloları Onar', x: -720, y: 560, icon: '⚡', timeSec: 2 },
-      { id: 'task_reactor_align', room: 'reactor', name: '⚛️ Reaktörü Soğut', x: -920, y: 200, icon: '⚛️', timeSec: 3 },
-      { id: 'task_scan_medbay', room: 'medbay', name: '💊 Biyometrik Tarama', x: 140, y: -630, icon: '💊', timeSec: 3 },
-      { id: 'task_steer_cockpit', room: 'cockpit', name: '🚀 Rotayı Belirle', x: 980, y: 180, icon: '🚀', timeSec: 2 },
-      { id: 'task_shields_sec', room: 'security', name: '🛡️ Kalkanları Güçlendir', x: -140, y: 640, icon: '🛡️', timeSec: 2 },
-      { id: 'task_trash_cafe', room: 'cafeteria', name: '☕ Çöpleri Boşalt', x: -250, y: 140, icon: '🗑️', timeSec: 2 }
-    ];
+    this.mapName = mapData.name;
+    this.mapIcon = mapData.icon;
+    this.mapAccent = mapData.accentColor;
+    this.walls = mapData.walls;
+    this.roomsList = mapData.roomsList;
+    this.doors = mapData.doors;
+    this.corridors = mapData.corridors;
+    this.vents = mapData.vents;
+    this.taskStations = mapData.taskStations;
   }
 
   onPlayerJoin(player) {
@@ -169,6 +67,7 @@ export class SpaceMode extends BaseMode {
     player.isVented = false;
     player.ventId = null;
     player.currentTask = null;
+    player.isDoingTask = false;
     player.taskProgress = 0;
     player.completedTasksList = [];
 
@@ -216,6 +115,8 @@ export class SpaceMode extends BaseMode {
     player.pos.set(Math.cos(angle) * dist, Math.sin(angle) * dist);
     player.vel.set(0, 0);
     player.isVented = false;
+    player.isDoingTask = false;
+    player.taskProgress = 0;
   }
 
   startMatch(callerName = 'Host') {
@@ -225,11 +126,30 @@ export class SpaceMode extends BaseMode {
     this.votes.clear();
     this.meetingReason = '';
 
+    // Reset Sabotage State
+    this.sabotage = {
+      type: null,
+      active: false,
+      timer: 0,
+      duration: 0,
+      cooldown: 8 // 8s initial grace cooldown
+    };
+
+    if (this.doors) {
+      this.doors.forEach(d => {
+        d.isOpen = false;
+        d.isLocked = false;
+        d.lockTimer = 0;
+        d.openTimer = 0;
+      });
+    }
+
     const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
     players.forEach(p => {
       p.isAlive = true;
       p.isVented = false;
       p.ventId = null;
+      p.isDoingTask = false;
       p.completedTasksList = [];
       p.taskProgress = 0;
       this.spawnAtCafeteria(p);
@@ -432,12 +352,89 @@ export class SpaceMode extends BaseMode {
       return;
     }
 
+    const player = this.room.players.get(playerId);
+    if (!player) return;
+
+    if (actionData.type === 'start_task') {
+      player.isDoingTask = true;
+      player.vel.set(0, 0);
+      return;
+    }
+
+    if (actionData.type === 'stop_task') {
+      player.isDoingTask = false;
+      return;
+    }
+
+    if (actionData.type === 'sabotage') {
+      if (player.role !== 'impostor' || !player.isAlive || player.isSpectator || this.gameState !== 'playing') return;
+      if (this.sabotage.cooldown > 0) return;
+
+      const sType = actionData.sabotageType;
+
+      if (sType === 'lights') {
+        this.sabotage = {
+          type: 'lights',
+          active: true,
+          timer: 20,
+          duration: 20,
+          cooldown: 25
+        };
+
+        this.room.broadcastEvent({
+          type: 'sabotage_start',
+          sabotageType: 'lights',
+          message: '⚠️ ELEKTRİK SABOTAJI! Işıklar kesildi! Elektrik odasında (⚡) şalteri kaldırın!'
+        });
+        this.room.broadcastChat('🚨 ALARM', 'Elektrikler kesildi! Görüş alanı daraldı. Elektrik odasında (⚡) jeneratörü onarın!', '#f43f5e');
+      } else if (sType === 'doors') {
+        this.sabotage = {
+          type: 'doors',
+          active: true,
+          timer: 10,
+          duration: 10,
+          cooldown: 22
+        };
+
+        if (this.doors) {
+          this.doors.forEach(d => {
+            d.isLocked = true;
+            d.lockTimer = 10;
+            d.isOpen = false;
+          });
+        }
+
+        this.room.broadcastEvent({
+          type: 'sabotage_start',
+          sabotageType: 'doors',
+          message: '🔒 HAVA KİLİTLERİ KAPATILDI! 10 saniye boyunca tüm kapılar kilitlendi!'
+        });
+        this.room.broadcastChat('🚨 ALARM', 'Tüm kapılar karantinaya alındı! 10 saniye boyunca hava kilitleri açılamaz.', '#f43f5e');
+      }
+      return;
+    }
+
+    if (actionData.type === 'fix_sabotage') {
+      if (this.sabotage.active && this.sabotage.type === 'lights') {
+        this.sabotage.active = false;
+        this.sabotage.type = null;
+        this.sabotage.timer = 0;
+
+        this.room.broadcastEvent({
+          type: 'sabotage_fixed',
+          sabotageType: 'lights',
+          message: '💡 Elektrik onarıldı! Işıklar normale döndü.'
+        });
+        this.room.broadcastChat('Sistem', 'Elektrikler onarıldı, görüş mesafesi normale döndü.', '#10b981');
+      }
+      return;
+    }
+
     if (actionData.type === 'vote') {
       this.castVote(playerId, actionData.targetId);
     } else if (actionData.type === 'complete_task') {
       this.completeTask(playerId, actionData.taskId);
     } else if (actionData.type === 'emergency_meeting' || actionData.type === 'report') {
-      const player = this.room.players.get(playerId);
       if (player && player.isAlive && !player.isSpectator && this.gameState === 'playing') {
         const callerName = player.name || 'Bir Oyuncu';
         this.startEmergencyMeeting(callerName, 'Acil Durum Butonuna Basıldı!');
@@ -448,6 +445,7 @@ export class SpaceMode extends BaseMode {
   completeTask(playerId, taskId) {
     const player = this.room.players.get(playerId);
     if (!player || player.isSpectator) return;
+    player.isDoingTask = false;
 
     const station = this.taskStations.find(s => s.id === taskId);
     if (!station) return;
@@ -470,7 +468,18 @@ export class SpaceMode extends BaseMode {
         y: station.y
       });
 
-      if (this.gameState === 'playing') {
+      if (this.totalTasks > 0 && this.completedTasks >= this.totalTasks) {
+        if (this.gameState === 'playing') {
+          this.checkWinConditions();
+        } else {
+          this.room.broadcastEvent({
+            type: 'game_over',
+            winner: 'crew',
+            message: '🛠️ MÜRETTEBAT ZAFERİ! Tüm Görevler Tamamlandı!'
+          });
+          this.room.broadcastChat('Sistem', '🎉 Tebrikler! Tüm görevler %100 tamamlandı! Maçta bu durumda Mürettebat doğrudan ZAFER kazanır.', '#10b981');
+        }
+      } else if (this.gameState === 'playing') {
         this.checkWinConditions();
       }
     }
@@ -581,7 +590,7 @@ export class SpaceMode extends BaseMode {
 
   checkWinConditions() {
     const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
-    if (players.length < 2) return;
+    if (players.length < 2 && this.completedTasks < this.totalTasks) return;
 
     const aliveCrew = players.filter(p => p.isAlive && p.role === 'crew');
     const aliveImpostors = players.filter(p => p.isAlive && p.role === 'impostor');
@@ -658,42 +667,56 @@ export class SpaceMode extends BaseMode {
       return;
     }
 
-    const playerList = Array.from(this.room.players.values());
-
-    for (let i = 0; i < playerList.length; i++) {
-      const p1 = playerList[i];
-      if (p1.isSpectator) continue;
-
-      this.handlePlayerInput(p1);
-
-      if (!p1.isVented) {
-        this.applyPlayerMovement(p1, dt);
-        p1.update(dt);
-
-        // Wall collisions (only for alive players; dead players/ghosts can float through walls)
-        if (p1.isAlive) {
-          for (const wall of this.walls) {
-            resolveSegmentCollision(p1, wall.p1, wall.p2, 0.4);
+    // Update Sabotage Timers
+    if (this.sabotage) {
+      if (this.sabotage.cooldown > 0) {
+        this.sabotage.cooldown = Math.max(0, this.sabotage.cooldown - dt);
+      }
+      if (this.sabotage.active && this.sabotage.timer > 0) {
+        this.sabotage.timer -= dt;
+        if (this.sabotage.timer <= 0) {
+          if (this.sabotage.type === 'lights') {
+            this.room.broadcastEvent({
+              type: 'sabotage_fixed',
+              sabotageType: 'lights',
+              message: '💡 Yedek jeneratör devreye girdi! Işıklar normale döndü.'
+            });
           }
+          this.sabotage.active = false;
+          this.sabotage.type = null;
+        }
+      }
+    }
 
-          // Collisions between alive players
-          for (let j = i + 1; j < playerList.length; j++) {
-            const p2 = playerList[j];
-            if (p2.isSpectator || !p2.isAlive || p2.isVented) continue;
-            resolveCircleCollision(p1, p2);
+    // Update Door Lock Timers
+    if (this.doors) {
+      for (const door of this.doors) {
+        if (door.lockTimer > 0) {
+          door.lockTimer -= dt;
+          if (door.lockTimer <= 0) {
+            door.isLocked = false;
           }
         }
       }
     }
 
-    // Automatic Proximity Door Sensors
+    const playerList = Array.from(this.room.players.values());
     const alivePlayers = playerList.filter(p => !p.isSpectator && p.isAlive && !p.isVented);
+
+    // Automatic Proximity Door Sensors (Only unlocked doors open on proximity)
     if (this.doors) {
       for (const door of this.doors) {
+        if (door.isLocked) {
+          door.isOpen = false;
+          continue;
+        }
+
         let someoneNear = false;
         for (const p of alivePlayers) {
-          const dist = Math.hypot(p.x - door.x, p.y - door.y);
-          if (dist < 100) {
+          const px = p.pos ? p.pos.x : (p.x || 0);
+          const py = p.pos ? p.pos.y : (p.y || 0);
+          const dist = Math.hypot(px - door.x, py - door.y);
+          if (dist < 130) {
             someoneNear = true;
             break;
           }
@@ -710,10 +733,57 @@ export class SpaceMode extends BaseMode {
         }
       }
     }
+
+    for (let i = 0; i < playerList.length; i++) {
+      const p1 = playerList[i];
+      if (p1.isSpectator) continue;
+
+      this.handlePlayerInput(p1);
+
+      if (!p1.isVented) {
+        this.applyPlayerMovement(p1, dt);
+        p1.update(dt);
+
+        // Wall & Closed Door collisions (only for alive players; dead players/ghosts can float through walls)
+        if (p1.isAlive) {
+          for (const wall of this.walls) {
+            resolveSegmentCollision(p1, wall.p1, wall.p2, 0.4);
+          }
+
+          // Closed or Locked Door Collisions
+          if (this.doors) {
+            for (const door of this.doors) {
+              if (!door.isOpen || door.isLocked) {
+                const isH = door.orientation === 'h';
+                const dw = door.w || (isH ? 130 : 28);
+                const dh = door.h || (isH ? 28 : 110);
+                const p1Door = isH ? new Vec2(door.x - dw / 2, door.y) : new Vec2(door.x, door.y - dh / 2);
+                const p2Door = isH ? new Vec2(door.x + dw / 2, door.y) : new Vec2(door.x, door.y + dh / 2);
+                resolveSegmentCollision(p1, p1Door, p2Door, 0.4);
+              }
+            }
+          }
+
+          // Collisions between alive players
+          for (let j = i + 1; j < playerList.length; j++) {
+            const p2 = playerList[j];
+            if (p2.isSpectator || !p2.isAlive || p2.isVented) continue;
+            resolveCircleCollision(p1, p2);
+          }
+        }
+      }
+    }
   }
 
   applyPlayerMovement(player, dt) {
     if (!player.input) return;
+
+    // Crewmate freeze completely while performing a task (cannot move)
+    if (player.isDoingTask || player.taskProgress > 0) {
+      player.vel.set(0, 0);
+      return;
+    }
+
     const accel = 1.05 * (this.room.speedMultiplier || 1.0);
     const maxSpeed = (player.isAlive ? 5.2 : 6.0) * (this.room.speedMultiplier || 1.0);
 
@@ -748,6 +818,9 @@ export class SpaceMode extends BaseMode {
 
     return {
       mode: 'space',
+      mapTheme: this.mapTheme || 'spaceship',
+      mapName: this.mapName || 'Uzay Gemisi',
+      mapIcon: this.mapIcon || '🚀',
       width: this.width,
       height: this.height,
       gameState: this.gameState,
@@ -758,6 +831,7 @@ export class SpaceMode extends BaseMode {
       taskProgressRatio: taskRatio,
       skipVotesCount: skipCount,
       impostorsLeft: aliveImpostors,
+      sabotage: this.sabotage || { type: null, active: false, timer: 0, duration: 0, cooldown: 0 },
       bodies: this.bodies,
       rooms: this.roomsList,
       corridors: this.corridors,
@@ -772,6 +846,8 @@ export class SpaceMode extends BaseMode {
         color: p.color,
         isAlive: p.isAlive,
         isVented: p.isVented,
+        isDoingTask: !!p.isDoingTask,
+        taskProgress: p.taskProgress || 0,
         role: p.role,
         completedTasksList: p.completedTasksList || [],
         hasVoted: this.votes.has(p.id)

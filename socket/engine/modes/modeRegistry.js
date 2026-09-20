@@ -35,11 +35,12 @@ class ModeRegistry {
    * Instantiates a game mode for the given room.
    * @param {string} modeType
    * @param {import('../room.js').Room} room
+   * @param {object} [options]
    * @returns {import('./BaseMode.js').BaseMode}
    */
-  createMode(modeType, room) {
+  createMode(modeType, room, options = {}) {
     const ModeClass = this.modes.get(modeType) || this.modes.get('puck');
-    return new ModeClass(room);
+    return new ModeClass(room, options);
   }
 
   /**

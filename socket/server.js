@@ -116,12 +116,14 @@ wss.on('connection', (ws) => {
           const speedMultiplier = Math.min(Math.max(parseFloat(data.speedMultiplier) || 1.35, 0.8), 2.5);
           const matchDuration = Math.min(Math.max(parseInt(data.matchDuration) || 180, 60), 1200);
           const isPrivate = !!data.isPrivate;
+          const mapTheme = (data.mapTheme && ['spaceship', 'castle', 'mansion'].includes(data.mapTheme)) ? data.mapTheme : 'spaceship';
 
           const newRoom = new Room(roomId, roomName, mode, {
             maxPlayers,
             isPrivate,
             speedMultiplier,
-            matchDuration
+            matchDuration,
+            mapTheme
           });
           rooms.set(roomId, newRoom);
 
@@ -206,7 +208,18 @@ wss.on('connection', (ws) => {
         case 'vote':
         case 'complete_task':
         case 'emergency_meeting':
-        case 'report': {
+        case 'report':
+        case 'conquest_submit_answer':
+        case 'submit_answer':
+        case 'conquest_claim_territory':
+        case 'claim_territory':
+        case 'conquest_attack_territory':
+        case 'attack_territory':
+        case 'sabotage':
+        case 'fix_sabotage':
+        case 'vampire_vote':
+        case 'doctor_heal':
+        case 'seer_investigate': {
           if (currentRoom) {
             const actionPayload = {
               ...data,

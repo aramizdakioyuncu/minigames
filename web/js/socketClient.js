@@ -204,10 +204,11 @@ export class SocketClient {
 
   sendAction(actionData) {
     if (!actionData) return;
+    const actType = actionData.type || actionData.action;
     this.send({
+      ...actionData,
       type: 'action',
-      action: actionData.type || actionData.action,
-      ...actionData
+      action: actType
     });
   }
 

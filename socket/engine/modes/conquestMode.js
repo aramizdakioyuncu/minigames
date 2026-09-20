@@ -187,7 +187,7 @@ export class ConquestMode extends BaseMode {
       caller: callerName,
       message: '🏰 BİL VE FETHET BAŞLADI!'
     });
-    this.room.broadcastChat('Sistem', `🏰 Bil ve Fethet başladı! Oyuncular zıt kenarlardaki başkent kalelerinden sefere çıktı!`, '#f59e0b');
+    this.room.broadcastChat('Sistem', `🏰 Bil ve Fethet başladı! Oyuncular kalelerinden sefere çıktı!`, '#f59e0b');
 
     this.startQuestionPhase();
   }
@@ -195,6 +195,7 @@ export class ConquestMode extends BaseMode {
   startQuestionPhase() {
     this.gameState = 'question';
     this.phaseTimer = this.questionDuration;
+    this.questionStartTime = Date.now();
     this.playerAnswers.clear();
     this.questionResults = null;
     this.currentQuestion = this.getRandomQuestion();
@@ -206,6 +207,7 @@ export class ConquestMode extends BaseMode {
       timer: this.questionDuration,
       category: this.currentQuestion.category,
       text: this.currentQuestion.text,
+      question: this.currentQuestion.text,
       unit: this.currentQuestion.unit
     });
   }
@@ -213,7 +215,30 @@ export class ConquestMode extends BaseMode {
   handleAction(playerId, actionData) {
     if (!actionData || !actionData.type) return;
 
-    if (actionData.type === 'start_match') {
+    if (actionData.type === 'start_match' || actionData.type === 'start_game') {
+      const player = this.room.players.get(playerId);
+      const callerName = player ? player.name : 'Host';
+      this.startMatch(callerName);
+      return;
+    }
+
+    if (actionData.type === 'stop_match') {
+      this.resetGame();
+      return;
+    }
+
+    if (actionData.type === 'toggle_match') {
+      if (this.gameState === 'waiting' || this.gameState === 'game_over') {
+        const player = this.room.players.get(playerId);
+        const callerName = player ? player.name : 'Host';
+        this.startMatch(callerName);
+      } else {
+        this.resetGame();
+      }
+      return;
+    }
+
+    if (actionData.type === 'restart_match') {
       const player = this.room.players.get(playerId);
       const callerName = player ? player.name : 'Host';
       this.startMatch(callerName);
@@ -221,7 +246,7 @@ export class ConquestMode extends BaseMode {
     }
 
     // 1. Submit Answer
-    if (actionData.type === 'submit_answer' && this.gameState === 'question') {
+    if ((actionData.type === 'submit_answer' || actionData.type === 'conquest_submit_answer') && this.gameState === 'question') {
       const player = this.room.players.get(playerId);
       if (!player || player.isSpectator) return;
 
@@ -238,7 +263,7 @@ export class ConquestMode extends BaseMode {
         // Notify client that answer was recorded
         this.room.sendToPlayer(playerId, { type: 'conquest_answer_received' });
 
-        // If all alive players submitted, evaluate immediately
+        // If all active players submitted, evaluate immediately
         const activePlayersCount = Array.from(this.room.players.values()).filter(p => !p.isSpectator).length;
         if (this.playerAnswers.size >= activePlayersCount) {
           this.resolveQuestion();
@@ -247,14 +272,14 @@ export class ConquestMode extends BaseMode {
     }
 
     // 2. Claim Territory Pick
-    if (actionData.type === 'claim_territory' && this.gameState === 'conquer_pick') {
+    if ((actionData.type === 'claim_territory' || actionData.type === 'conquest_claim_territory') && this.gameState === 'conquer_pick') {
       if (this.activePickerId === playerId) {
         this.claimTerritory(playerId, actionData.territoryId);
       }
     }
 
     // 3. Attack Territory in Duel
-    if (actionData.type === 'attack_territory' && this.gameState === 'duel_pick') {
+    if ((actionData.type === 'attack_territory' || actionData.type === 'conquest_attack_territory') && this.gameState === 'duel_pick') {
       if (this.activePickerId === playerId) {
         this.startDuel(playerId, actionData.territoryId);
       }
@@ -265,20 +290,39 @@ export class ConquestMode extends BaseMode {
     this.gameState = 'question_result';
     this.phaseTimer = this.resultDuration;
 
-    const correctAnswer = this.currentQuestion.answer;
+    const correctAnswer = this.currentQuestion ? this.currentQuestion.answer : 100;
     const evaluated = [];
+    const activePlayers = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
 
-    for (const [pId, data] of this.playerAnswers.entries()) {
-      const diff = Math.abs(data.answer - correctAnswer);
-      evaluated.push({
-        playerId: pId,
-        name: data.name,
-        avatar: data.avatar,
-        color: data.color,
-        answer: data.answer,
-        diff,
-        submitTime: data.submitTime
-      });
+    for (const p of activePlayers) {
+      const data = this.playerAnswers.get(p.id);
+      if (data) {
+        const diff = Math.abs(data.answer - correctAnswer);
+        const timeTaken = Math.max(0.4, (data.submitTime - (this.questionStartTime || data.submitTime)) / 1000);
+        evaluated.push({
+          playerId: p.id,
+          name: p.name,
+          username: p.name,
+          avatar: p.avatar,
+          color: p.color,
+          answer: data.answer,
+          diff,
+          submitTime: data.submitTime,
+          timeTaken
+        });
+      } else {
+        evaluated.push({
+          playerId: p.id,
+          name: p.name,
+          username: p.name,
+          avatar: p.avatar,
+          color: p.color,
+          answer: null,
+          diff: 999999,
+          submitTime: Date.now(),
+          timeTaken: this.questionDuration
+        });
+      }
     }
 
     // Sort by difference first (accuracy), then by submitTime (speed)
@@ -294,24 +338,22 @@ export class ConquestMode extends BaseMode {
     this.room.broadcastEvent({
       type: 'conquest_question_result',
       correctAnswer,
-      unit: this.currentQuestion.unit,
-      results: evaluated
+      unit: this.currentQuestion ? this.currentQuestion.unit : '',
+      results: evaluated,
+      rankings: evaluated
     });
 
-    // Check if there are neutral territories left to conquer
-    const neutralTerritories = this.territories.filter(t => t.ownerId === null);
-    
-    // Fill pickerQueue with winners (top 1, 2, or 3)
-    this.pickerQueue = evaluated.map(e => e.playerId);
+    // Fill pickerQueue with winners who answered
+    this.pickerQueue = evaluated.filter(e => e.answer !== null).map(e => e.playerId);
+    if (this.pickerQueue.length === 0) {
+      this.pickerQueue = activePlayers.map(p => p.id);
+    }
+    // Limit queue to top players per round
+    this.pickerQueue = this.pickerQueue.slice(0, Math.min(3, activePlayers.length));
 
     setTimeout(() => {
       if (this.gameState === 'game_over') return;
-      if (neutralTerritories.length > 0) {
-        this.startConquerPickPhase();
-      } else {
-        // All territories claimed -> start Siege / Duel Battles!
-        this.startConquerPickPhase();
-      }
+      this.startConquerPickPhase();
     }, this.resultDuration * 1000);
   }
 
@@ -331,6 +373,7 @@ export class ConquestMode extends BaseMode {
     this.room.broadcastEvent({
       type: 'conquest_pick_turn',
       pickerId: this.activePickerId,
+      pickingPlayerId: this.activePickerId,
       pickerName,
       timer: this.pickDuration
     });
@@ -344,9 +387,8 @@ export class ConquestMode extends BaseMode {
     const territory = this.territories.find(t => t.id === territoryId);
     if (!territory) return;
 
-    // In neutral phase or attack phase
-    const oldOwnerId = territory.ownerId;
     territory.ownerId = playerId;
+    territory.ownerName = player.name;
     territory.color = player.color || '#3b82f6';
 
     // Recalculate scores
@@ -358,6 +400,7 @@ export class ConquestMode extends BaseMode {
       territoryName: territory.name,
       conquerorId: playerId,
       conquerorName: player.name,
+      ownerName: player.name,
       color: territory.color,
       points: territory.points
     });
@@ -449,10 +492,16 @@ export class ConquestMode extends BaseMode {
     if (this.gameState === 'question') {
       this.resolveQuestion();
     } else if (this.gameState === 'conquer_pick') {
-      // Auto pick a random available territory
-      const neutral = this.territories.filter(t => t.ownerId === null);
-      if (neutral.length > 0 && this.activePickerId) {
-        this.claimTerritory(this.activePickerId, neutral[0].id);
+      // Auto pick a random available territory (unowned or opponent's)
+      if (this.activePickerId) {
+        const available = this.territories.filter(t => t.ownerId !== this.activePickerId);
+        const unowned = available.filter(t => t.ownerId === null);
+        const target = unowned.length > 0 ? unowned[Math.floor(Math.random() * unowned.length)] : available[0];
+        if (target) {
+          this.claimTerritory(this.activePickerId, target.id);
+        } else {
+          this.advancePickerQueue();
+        }
       } else {
         this.advancePickerQueue();
       }
@@ -461,16 +510,35 @@ export class ConquestMode extends BaseMode {
 
   getState() {
     const playerList = Array.from(this.room.players.values());
+    const isMatchActive = this.gameState !== 'waiting' && this.gameState !== 'game_over';
+
     return {
       mode: 'conquest',
       width: this.width,
       height: this.height,
       gameState: this.gameState,
+      phase: this.gameState,
+      isMatchActive,
       currentRound: this.currentRound,
       maxRounds: this.maxRounds,
       phaseTimer: Math.ceil(this.phaseTimer),
+      timer: Math.ceil(this.phaseTimer),
       activePickerId: this.activePickerId,
+      pickingPlayerId: this.activePickerId,
       territories: this.territories,
+      connections: this.connections,
+      currentQuestion: this.currentQuestion ? {
+        category: this.currentQuestion.category,
+        text: this.currentQuestion.text,
+        question: this.currentQuestion.text,
+        unit: this.currentQuestion.unit
+      } : null,
+      lastResult: this.questionResults ? {
+        correctAnswer: this.currentQuestion ? this.currentQuestion.answer : 0,
+        unit: this.currentQuestion ? this.currentQuestion.unit : '',
+        rankings: this.questionResults,
+        results: this.questionResults
+      } : null,
       scores: Array.from(this.scores.entries()).map(([id, score]) => ({ id, score })),
       playersMeta: playerList.map(p => ({
         id: p.id,

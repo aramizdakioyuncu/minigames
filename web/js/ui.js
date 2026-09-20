@@ -1,5 +1,11 @@
-// UI Controller for DOM interactions, Modals and HUD updates
+// ui.js - Modular UI Orchestrator for ARMOYU MiniGames
+
 import { clientModeRegistry } from './modes/clientModeRegistry.js';
+import { TasksMiniGamesController } from './ui/tasksMiniGames.js';
+import { VampireUIController } from './ui/vampireUI.js';
+import { ConquestUIController } from './ui/conquestUI.js';
+import { EscMenuController } from './ui/escMenu.js';
+import { ProfileUIController } from './ui/profileUI.js';
 
 export class UIController {
   constructor() {
@@ -14,7 +20,7 @@ export class UIController {
     // Modals
     this.modalCreateRoom = document.getElementById('modal-create-room');
 
-    // Profile elements
+    // Profile inputs
     this.inputNickname = document.getElementById('input-nickname');
     this.avatarPicker = document.getElementById('avatar-picker');
     this.colorPicker = document.getElementById('color-picker');
@@ -29,6 +35,7 @@ export class UIController {
     this.btnRefreshRooms = document.getElementById('btn-refresh-rooms');
     this.btnOpenCreateRoom = document.getElementById('btn-open-create-room');
     this.btnSoundToggle = document.getElementById('btn-sound-toggle');
+    this.btnOpenProfileModal = document.getElementById('btn-open-profile-modal');
 
     // Create room inputs
     this.createRoomName = document.getElementById('create-room-name');
@@ -42,8 +49,8 @@ export class UIController {
     this.hudSumo = document.getElementById('hud-sumo');
     this.hudAgar = document.getElementById('hud-agar');
     this.hudSpace = document.getElementById('hud-space');
-    this.taskProgressFill = document.getElementById('task-progress-fill');
-    this.taskPercentText = document.getElementById('task-percent-text');
+    this.spaceTaskFill = document.getElementById('task-progress-fill');
+    this.spaceTaskPercentage = document.getElementById('task-percent-text');
     this.spaceRoleBadge = document.getElementById('space-role-badge');
     this.roleRevealBanner = document.getElementById('role-reveal-banner');
     this.roleRevealTitle = document.getElementById('role-reveal-title');
@@ -71,7 +78,6 @@ export class UIController {
     this.btnCloseTask = document.getElementById('btn-close-task');
     this.taskMiniIcon = document.getElementById('task-mini-icon');
     this.taskMiniTitle = document.getElementById('task-mini-title');
-    this.activeTaskStation = null;
     this.taskPanels = {
       wires: document.getElementById('task-panel-wires'),
       shields: document.getElementById('task-panel-shields'),
@@ -81,10 +87,6 @@ export class UIController {
       steer: document.getElementById('task-panel-steer')
     };
 
-    if (this.btnCloseTask) {
-      this.btnCloseTask.addEventListener('click', () => this.closeTaskMiniGame());
-    }
-
     // ESC Menu Modal Elements
     this.modalEscMenu = document.getElementById('modal-esc-menu');
     this.btnOpenEscMenu = document.getElementById('btn-open-esc-menu');
@@ -92,18 +94,19 @@ export class UIController {
     this.btnEscResume = document.getElementById('btn-esc-resume');
     this.escRoomName = document.getElementById('esc-room-name');
     this.escHostBadge = document.getElementById('esc-room-host-badge');
+    this.btnHostToggleMatch = document.getElementById('btn-host-toggle-match');
     this.btnHostRestart = document.getElementById('btn-host-restart');
     this.btnPlayerVoteRestart = document.getElementById('btn-player-vote-restart');
-    this.escRestartVoteCount = document.getElementById('esc-restart-vote-count');
     this.btnEscSoundToggle = document.getElementById('btn-esc-sound-toggle');
     this.btnEscZoomToggle = document.getElementById('btn-esc-zoom-toggle');
     this.btnEscLeaveRoom = document.getElementById('btn-esc-leave-room');
+    this.btnHudStartMatch = document.getElementById('btn-hud-start-match');
+    this.btnHudVoteMatch = document.getElementById('btn-hud-vote-match');
 
-    // Spectator Banner Elements
+    // Spectator & Team Switcher
     this.hudSpectatorBanner = document.getElementById('hud-spectator-banner');
     this.btnSpecJoinRed = document.getElementById('btn-spec-join-red');
     this.btnSpecJoinBlue = document.getElementById('btn-spec-join-blue');
-
     this.hudLeaderboard = document.getElementById('hud-leaderboard');
     this.leaderboardList = document.getElementById('leaderboard-list');
     this.scoreRed = document.getElementById('score-red');
@@ -118,11 +121,8 @@ export class UIController {
     this.puckPhaseBadge = document.getElementById('puck-phase-badge');
     this.labelTeamRed = document.getElementById('label-team-red');
     this.labelTeamBlue = document.getElementById('label-team-blue');
-    this.btnHostToggleMatch = document.getElementById('btn-host-toggle-match');
-    this.btnHudStartMatch = document.getElementById('btn-hud-start-match');
-    this.btnHudVoteMatch = document.getElementById('btn-hud-vote-match');
 
-    // Dynamic Hints & Mobile Buttons
+    // Hints
     this.hintAction = document.getElementById('hint-action');
     this.hintHold = document.getElementById('hint-hold');
     this.hintExtra = document.getElementById('hint-extra');
@@ -137,59 +137,28 @@ export class UIController {
     this.chatForm = document.getElementById('chat-form');
     this.chatInput = document.getElementById('chat-input');
 
-    // Vampire Mode HUD Elements
+    // Vampire Mode Elements
     this.hudVampire = document.getElementById('hud-vampire');
     this.vampirePhaseBadge = document.getElementById('vampire-phase-badge');
     this.vampireDayCount = document.getElementById('vampire-day-count');
     this.vampirePhaseTimer = document.getElementById('vampire-phase-timer');
     this.vampireAliveCount = document.getElementById('vampire-alive-count');
     this.vampireRoleBadge = document.getElementById('vampire-role-badge');
+    this.modalVampireRoleReveal = document.getElementById('modal-vampire-role');
+    this.vampireRoleIcon = document.getElementById('vampire-reveal-icon');
+    this.vampireRoleTitle = document.getElementById('vampire-reveal-title');
+    this.vampireRoleTeam = document.getElementById('vampire-team-list');
+    this.vampireRoleDesc = document.getElementById('vampire-reveal-desc');
+    this.modalVampireNight = document.getElementById('modal-vampire-action');
+    this.vampireNightActionTitle = document.getElementById('vampire-action-title');
+    this.vampireNightTargetList = document.getElementById('vampire-action-grid');
 
-    // Vampire Role Reveal Modal
-    this.modalVampireRole = document.getElementById('modal-vampire-role');
-    this.vampireRevealIcon = document.getElementById('vampire-reveal-icon');
-    this.vampireRevealTitle = document.getElementById('vampire-reveal-title');
-    this.vampireRevealDesc = document.getElementById('vampire-reveal-desc');
-    this.vampireTeamList = document.getElementById('vampire-team-list');
-    this.btnCloseVampireRole = document.getElementById('btn-close-vampire-role');
-    if (this.btnCloseVampireRole) {
-      this.btnCloseVampireRole.addEventListener('click', () => {
-        if (this.modalVampireRole) this.modalVampireRole.classList.add('hidden');
-      });
-    }
-
-    // Vampire Night Action Modal
-    this.modalVampireAction = document.getElementById('modal-vampire-action');
-    this.vampireActionIcon = document.getElementById('vampire-action-icon');
-    this.vampireActionTitle = document.getElementById('vampire-action-title');
-    this.vampireActionDesc = document.getElementById('vampire-action-desc');
-    this.vampireActionGrid = document.getElementById('vampire-action-grid');
-    this.btnVampireActionSkip = document.getElementById('btn-vampire-action-skip');
-
-    // Vampire Trial Modal
-    this.modalVampireTrial = document.getElementById('modal-vampire-trial');
-    this.trialTimerText = document.getElementById('trial-timer-text');
-    this.trialCandidatesGrid = document.getElementById('trial-candidates-grid');
-    this.btnTrialSkipVote = document.getElementById('btn-trial-skip-vote');
-    this.trialSkipCount = document.getElementById('trial-skip-count');
-
-    // Vampire Seer Result Modal
-    this.modalVampireSeerResult = document.getElementById('modal-vampire-seer-result');
-    this.seerResultContent = document.getElementById('seer-result-content');
-    this.btnCloseSeerResult = document.getElementById('btn-close-seer-result');
-    if (this.btnCloseSeerResult) {
-      this.btnCloseSeerResult.addEventListener('click', () => {
-        if (this.modalVampireSeerResult) this.modalVampireSeerResult.classList.add('hidden');
-      });
-    }
-
-    // Conquest (Bil ve Fethet) HUD & Modals
+    // Conquest Mode Elements
     this.hudConquest = document.getElementById('hud-conquest');
     this.conquestPhaseBadge = document.getElementById('conquest-phase-badge');
     this.conquestRoundCount = document.getElementById('conquest-round-count');
     this.conquestMyScore = document.getElementById('conquest-my-score');
     this.conquestTerritoryCount = document.getElementById('conquest-territory-count');
-
     this.modalConquestQuestion = document.getElementById('modal-conquest-question');
     this.conquestCatBadge = document.getElementById('conquest-cat-badge');
     this.conquestQuestionTimer = document.getElementById('conquest-question-timer');
@@ -200,28 +169,35 @@ export class UIController {
     this.btnConquestClear = document.getElementById('btn-conquest-clear');
     this.btnConquestBackspace = document.getElementById('btn-conquest-backspace');
     this.btnConquestSubmitAnswer = document.getElementById('btn-conquest-submit-answer');
-
     this.modalConquestResult = document.getElementById('modal-conquest-result');
     this.conquestCorrectAnswerVal = document.getElementById('conquest-correct-answer-val');
     this.conquestPodiumList = document.getElementById('conquest-podium-list');
-
-    this.onConquestSubmitAnswer = null;
-    this.bindConquestKeypad();
 
     // Goal Announcement
     this.goalAnnouncement = document.getElementById('goal-announcement');
     this.goalText = document.getElementById('goal-text');
     this.goalScorer = document.getElementById('goal-scorer');
+
+    // Instantiate Sub-Controllers
+    this.tasksController = new TasksMiniGamesController(this);
+    this.vampireController = new VampireUIController(this);
+    this.conquestController = new ConquestUIController(this);
+    this.escMenuController = new EscMenuController(this);
+    this.profileUIController = new ProfileUIController(this);
+
+    if (this.btnOpenProfileModal) {
+      this.btnOpenProfileModal.addEventListener('click', () => this.profileUIController.openProfileDashboard());
+    }
+
+    if (this.btnCloseTask) {
+      this.btnCloseTask.addEventListener('click', () => this.tasksController.closeTask());
+    }
   }
 
   showView(viewId) {
     [this.viewProfile, this.viewLobby, this.viewGame].forEach(v => {
       if (v) {
-        if (v.id === viewId) {
-          v.classList.add('active');
-        } else {
-          v.classList.remove('active');
-        }
+        v.classList.toggle('active', v.id === viewId);
       }
     });
     this.currentView = viewId;
@@ -249,76 +225,59 @@ export class UIController {
     });
 
     if (filtered.length === 0) {
-      this.roomsList.innerHTML = `<div class="rooms-empty">Bu kategoride açık oda bulunamadı. Hemen bir tane oluşturabilirsin!</div>`;
+      this.roomsList.innerHTML = `
+        <div class="rooms-empty">
+          <p>Aktif oda bulunamadı.</p>
+          <p class="sub-text">Hemen "+ Yeni Oda Kur" butonuna tıklayarak ilk odayı başlat!</p>
+        </div>
+      `;
       return;
     }
 
     filtered.forEach(room => {
       const item = document.createElement('div');
-      item.className = 'room-item';
+      item.className = 'room-card';
 
       let tagClass = 'tag-puck';
-      let tagLabel = '⚽ DİSK FUTBOLU';
-      if (room.mode === 'space') {
-        tagClass = 'tag-space';
-        tagLabel = '🚀 UZAY CASUSU';
-      } else if (room.mode === 'vampire') {
-        tagClass = 'tag-vampire';
-        tagLabel = '🧛 VAMPİR KÖYLÜ';
-      } else if (room.mode === 'conquest') {
-        tagClass = 'tag-conquest';
-        tagLabel = '🏰 BİL VE FETHET';
-      } else if (room.mode === 'sumo') {
-        tagClass = 'tag-sumo';
-        tagLabel = '🥊 SUMO';
+      let modeIcon = '⚽';
+      let modeTitle = 'Futbol';
+
+      if (room.mode === 'sumo') {
+        tagClass = 'tag-sumo'; modeIcon = '🥊'; modeTitle = 'Sumo';
       } else if (room.mode === 'agar') {
-        tagClass = 'tag-agar';
-        tagLabel = '🟢 AGAR';
+        tagClass = 'tag-agar'; modeIcon = '🟢'; modeTitle = 'Agar';
+      } else if (room.mode === 'space') {
+        tagClass = 'tag-space'; modeIcon = '🚀'; modeTitle = 'Uzay Casusu';
+      } else if (room.mode === 'vampire') {
+        tagClass = 'tag-vampire'; modeIcon = '🧛'; modeTitle = 'Vampir Köylü';
+      } else if (room.mode === 'conquest') {
+        tagClass = 'tag-conquest'; modeIcon = '🏰'; modeTitle = 'Bil ve Fethet';
       }
 
-      const isFull = room.playerCount >= room.maxPlayers;
-      let speedIcon = '⚡';
-      let speedLabel = '1.0x';
-      if (room.speedMultiplier >= 1.4) {
-        speedIcon = '🔥';
-        speedLabel = `${room.speedMultiplier}x Turbo`;
-      } else if (room.speedMultiplier >= 1.15) {
-        speedIcon = '🚀';
-        speedLabel = `${room.speedMultiplier}x Hızlı`;
-      } else {
-        speedLabel = `${room.speedMultiplier || 1.0}x Normal`;
-      }
-
-      const tackleBadge = room.tackleEnabled ? `<span class="room-tackle-tag">🥊 Faul Açık</span>` : '';
+      const isFull = (room.playersCount || room.playerCount || 0) >= room.maxPlayers;
 
       item.innerHTML = `
-        <div class="room-info-left">
-          <span class="room-mode-tag ${tagClass}">${tagLabel}</span>
-          <span class="room-speed-tag">${speedIcon} ${speedLabel}</span>
-          ${tackleBadge}
-          <span class="room-title">${this.escapeHtml(room.name)}</span>
+        <div class="room-info">
+          <div class="room-title-row">
+            <h4 class="room-name">${this.escapeHtml(room.name || 'Arena')}</h4>
+            <span class="mode-tag ${tagClass}">${modeIcon} ${modeTitle}</span>
+          </div>
+          <div class="room-meta">
+            <span>👥 ${room.playersCount || room.playerCount || 0} / ${room.maxPlayers} Oyuncu</span>
+            <span>⚡ Hız: ${room.speedMultiplier || 1.0}x</span>
+          </div>
         </div>
-        <div class="room-info-right">
-          <span class="room-players-badge">👥 ${room.playerCount} / ${room.maxPlayers}</span>
-          <button class="btn ${isFull ? 'btn-secondary' : 'btn-primary'} btn-sm btn-join" ${isFull ? 'disabled' : ''}>
+        <div class="room-actions">
+          <button class="btn btn-primary btn-sm btn-join" ${isFull ? 'disabled' : ''}>
             ${isFull ? 'Dolu' : 'Katıl ➔'}
           </button>
         </div>
       `;
 
       const btnJoin = item.querySelector('.btn-join');
-      const handleJoin = (e) => {
-        if (!isFull) {
-          onJoinCallback(room.id);
-        }
-      };
-
-      item.style.cursor = isFull ? 'default' : 'pointer';
-      item.addEventListener('click', handleJoin);
-      if (btnJoin) {
-        btnJoin.addEventListener('click', (e) => {
-          e.stopPropagation();
-          handleJoin(e);
+      if (btnJoin && !isFull) {
+        btnJoin.addEventListener('click', () => {
+          if (onJoinCallback) onJoinCallback(room.id);
         });
       }
 
@@ -327,904 +286,163 @@ export class UIController {
   }
 
   renderGameModesCarousel(modes) {
-    if (!this.modesCarousel || !Array.isArray(modes) || modes.length === 0) return;
+    if (!this.modesCarousel || !modes) return;
     this.modesCarousel.innerHTML = '';
 
     modes.forEach(mode => {
       const card = document.createElement('div');
       card.className = `mode-card card-${mode.id}`;
-      card.style.cursor = 'pointer';
-      const badgeStyle = mode.color
-        ? `background: ${mode.color}25; color: ${mode.color}; border: 1px solid ${mode.color}50;`
-        : '';
-
       card.innerHTML = `
-        <div class="mode-badge" style="${badgeStyle}">${this.escapeHtml(mode.badge || 'Mod')}</div>
-        <h3>${this.escapeHtml(mode.name)}</h3>
-        <p>${this.escapeHtml(mode.description)}</p>
+        <div class="mode-badge" style="background: ${mode.color || 'var(--primary)'}22; color: ${mode.color || 'var(--primary)'}; border: 1px solid ${mode.color || 'var(--primary)'}44;">
+          ${mode.badge || 'Mod'}
+        </div>
+        <h3>${mode.name}</h3>
+        <p>${mode.description}</p>
       `;
-
-      card.addEventListener('click', () => {
-        const tab = document.querySelector(`.tab-btn[data-filter="${mode.id}"]`);
-        if (tab) tab.click();
-      });
-
       this.modesCarousel.appendChild(card);
     });
   }
 
+  showGoalBanner(title, text) {
+    if (!this.goalAnnouncement) return;
+    if (this.goalText) this.goalText.textContent = title || 'GOL!';
+    if (this.goalScorer) this.goalScorer.textContent = text || '';
+
+    this.goalAnnouncement.classList.remove('hidden');
+    this.goalAnnouncement.classList.add('animate-banner');
+
+    setTimeout(() => {
+      if (this.goalAnnouncement) {
+        this.goalAnnouncement.classList.remove('animate-banner');
+        this.goalAnnouncement.classList.add('hidden');
+      }
+    }, 2800);
+  }
+
+  showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'hud-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('fade-out');
+      setTimeout(() => toast.remove(), 400);
+    }, 3000);
+  }
+
   prepareGameHUD(mode, roomData) {
-    clientModeRegistry.activate(mode, roomData, this);
+    if (!mode) return;
+    const activeMode = clientModeRegistry.getActiveMode(mode);
+    if (activeMode && typeof activeMode.onActivate === 'function') {
+      activeMode.onActivate(roomData, this);
+    }
   }
 
   updateHUD(gameState, myPlayerId) {
     if (!gameState) return;
-    const activeMode = clientModeRegistry.getActiveMode();
-    if (activeMode && activeMode.updateHUD) {
+    const activeMode = clientModeRegistry.getActiveMode(gameState.mode);
+    if (activeMode && typeof activeMode.updateHUD === 'function') {
       activeMode.updateHUD(this, gameState, myPlayerId);
     }
   }
 
-  renderMeetingPlayers(players, myPlayerId) {
-    if (!this.meetingPlayersGrid) return;
-    this.meetingPlayersGrid.innerHTML = '';
-
-    const myPlayerMeta = players.find(p => p.id === myPlayerId);
-    const iHaveVoted = myPlayerMeta ? myPlayerMeta.hasVoted : false;
-    const isMeDead = myPlayerMeta ? !myPlayerMeta.isAlive : false;
-
-    players.forEach(p => {
-      const isDead = !p.isAlive;
-      const isMe = p.id === myPlayerId;
-      const card = document.createElement('div');
-      card.className = `meeting-player-card ${isDead ? 'meeting-player-dead' : ''} ${isMe ? 'meeting-player-me' : ''}`;
-      
-      const votedBadge = p.hasVoted ? `<span class="voted-check-badge">✓ Oy Verdi</span>` : `<span class="voted-waiting-badge">⏳ Düşünüyor</span>`;
-      const voteBtn = (!isDead && !isMe && !iHaveVoted && !isMeDead) ? `<button class="btn-vote" data-id="${p.id}">🗳️ OY VER</button>` : '';
-
-      card.innerHTML = `
-        <div class="meeting-card-left">
-          <span class="meeting-avatar">${p.avatar || '👤'}</span>
-          <div class="meeting-player-details">
-            <span class="meeting-name" style="color: ${p.color || '#fff'}">${this.escapeHtml(p.name)}${isMe ? ' (Sen)' : ''}</span>
-            ${isDead ? '<span class="dead-status-tag">💀 Elendi</span>' : votedBadge}
-          </div>
-        </div>
-        <div class="meeting-card-right">
-          ${voteBtn}
-        </div>
-      `;
-      this.meetingPlayersGrid.appendChild(card);
-    });
+  addChatMessage(sender, text, color = '#ffffff') {
+    if (!this.chatMessages) return;
+    const msg = document.createElement('div');
+    msg.className = 'chat-msg';
+    msg.innerHTML = `<span class="sender" style="color: ${color}">${this.escapeHtml(sender)}:</span> <span class="text">${this.escapeHtml(text)}</span>`;
+    this.chatMessages.appendChild(msg);
+    this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
   }
 
-  showEjectionScreen(ejectedData, isTie, isSkip, message) {
-    if (!this.ejectionScreen) return;
-
-    if (ejectedData) {
-      if (this.ejectedAvatar) this.ejectedAvatar.textContent = ejectedData.avatar || '⚽';
-      if (this.ejectionTitle) this.ejectionTitle.textContent = `${ejectedData.name} uzay boşluğuna fırlatıldı...`;
-      if (this.ejectionSubtitle) {
-        if (ejectedData.wasImpostor) {
-          this.ejectionSubtitle.textContent = `🔪 ${ejectedData.name} BİR CASUSTU! (${ejectedData.impostorsLeft} Casus Kaldı)`;
-          this.ejectionSubtitle.style.color = '#ef4444';
-        } else {
-          this.ejectionSubtitle.textContent = `🛠️ ${ejectedData.name} bir Casus Değildi. (${ejectedData.impostorsLeft} Casus Kaldı)`;
-          this.ejectionSubtitle.style.color = '#38bdf8';
-        }
-      }
-    } else {
-      if (this.ejectedAvatar) this.ejectedAvatar.textContent = '🌌';
-      if (this.ejectionTitle) this.ejectionTitle.textContent = isSkip ? 'Oylama Pas Geçildi.' : 'Oylama Berabere Sonuçlandı.';
-      if (this.ejectionSubtitle) {
-        this.ejectionSubtitle.textContent = 'Kimse uzay boşluğuna atılmadı.';
-        this.ejectionSubtitle.style.color = '#94a3b8';
-      }
-    }
-
-    this.ejectionScreen.classList.remove('hidden');
-
-    setTimeout(() => {
-      this.ejectionScreen.classList.add('hidden');
-    }, 4500);
-  }
-
-  addMeetingChatMessage(sender, text, color) {
-    if (!this.meetingChatMessages) return;
-    const item = document.createElement('div');
-    item.className = 'chat-item';
-    item.innerHTML = `<span class="chat-sender" style="color: ${color || '#38bdf8'}">${this.escapeHtml(sender)}:</span> <span class="chat-text">${this.escapeHtml(text)}</span>`;
-
-    this.meetingChatMessages.appendChild(item);
-    this.meetingChatMessages.scrollTop = this.meetingChatMessages.scrollHeight;
-  }
-
-  // --- ESC Pause & Quick Menu ---
-
-  toggleEscMenu(forceOpen = null) {
+  toggleEscMenu(show) {
     if (!this.modalEscMenu) return;
-    if (forceOpen === true) {
-      this.modalEscMenu.classList.remove('hidden');
-    } else if (forceOpen === false) {
-      this.modalEscMenu.classList.add('hidden');
+    if (show !== undefined) {
+      this.modalEscMenu.classList.toggle('hidden', !show);
     } else {
       this.modalEscMenu.classList.toggle('hidden');
     }
   }
 
-  isEscMenuOpen() {
-    return this.modalEscMenu && !this.modalEscMenu.classList.contains('hidden');
-  }
-
-  updateEscMenu(gameState, myPlayerId, roomData) {
-    if (!this.modalEscMenu) return;
-
-    if (roomData && this.escRoomName) {
-      this.escRoomName.textContent = `Oda: ${roomData.roomName || roomData.name || 'Arena'}`;
-    }
-
-    if (gameState) {
-      const isHost = !gameState.hostId || gameState.hostId === myPlayerId || (gameState.players && gameState.players.length <= 1);
-      const hostPlayer = (gameState.players || []).find(p => p.id === gameState.hostId);
-      const isMatchActive = !!(gameState.modeState && (gameState.modeState.isMatchActive || gameState.modeState.gameState === 'playing' || gameState.modeState.gameState === 'meeting'));
-
-      if (this.escHostBadge) {
-        this.escHostBadge.textContent = `👑 Host: ${hostPlayer ? hostPlayer.name : (isHost ? 'Sen' : 'Bilinmiyor')}${isHost ? ' (Sen)' : ''}`;
-      }
-
-      // Host Start / Stop Toggle Button
-      if (this.btnHostToggleMatch) {
-        this.btnHostToggleMatch.classList.toggle('hidden', !isHost);
-        if (isHost) {
-          if (isMatchActive) {
-            this.btnHostToggleMatch.textContent = gameState.mode === 'space' ? '⏹️ Oyunu Bitir (Host)' : '⏹️ Maçı Bitir (Host)';
-            this.btnHostToggleMatch.className = 'btn btn-danger btn-block';
-          } else {
-            this.btnHostToggleMatch.textContent = gameState.mode === 'space' ? '🚀 Oyunu Başlat (Host)' : '⚽ Maçı Başlat (Host)';
-            this.btnHostToggleMatch.className = 'btn btn-primary btn-block';
-          }
-        }
-      }
-
-      if (this.btnHostRestart) {
-        this.btnHostRestart.classList.toggle('hidden', !isHost);
-      }
-
-      if (this.btnPlayerVoteRestart) {
-        this.btnPlayerVoteRestart.classList.toggle('hidden', isHost);
-        const votes = gameState.restartVotesCount || 0;
-        const needed = gameState.restartVotesNeeded || 1;
-        const voteLabel = isMatchActive ? 'Maçı Yeniden Başlatma Oyu Ver' : 'Maçı Başlatma Oyu Ver';
-        this.btnPlayerVoteRestart.innerHTML = `🗳️ ${voteLabel} <span id="esc-restart-vote-count">(${votes}/${needed})</span>`;
-        this.escRestartVoteCount = document.getElementById('esc-restart-vote-count');
-      }
-
-      // Also update top bar HUD match controls
-      this.updateHUDMatchControls(gameState, myPlayerId);
-    }
-  }
-
-  updateHUDMatchControls(gameState, myPlayerId) {
-    if (!gameState) return;
-    const isHost = !gameState.hostId || gameState.hostId === myPlayerId || (gameState.players && gameState.players.length <= 1);
-    const votes = gameState.restartVotesCount || 0;
-    const needed = gameState.restartVotesNeeded || 1;
-
-    if (gameState.mode === 'puck') {
-      const phase = (gameState.modeState && gameState.modeState.matchPhase) || 'waiting';
-      const isWaiting = phase === 'waiting' || phase === 'game_over';
-
-      if (isWaiting) {
-        if (isHost) {
-          if (this.btnHudStartMatch) {
-            this.btnHudStartMatch.textContent = '⚽ Maçı Başlat';
-            this.btnHudStartMatch.className = 'btn btn-success btn-sm pulse-glow';
-            this.btnHudStartMatch.classList.remove('hidden');
-          }
-          if (this.btnHudVoteMatch) this.btnHudVoteMatch.classList.add('hidden');
-        } else {
-          if (this.btnHudStartMatch) this.btnHudStartMatch.classList.add('hidden');
-          if (this.btnHudVoteMatch) {
-            this.btnHudVoteMatch.textContent = `🗳️ Başlatma Oyu (${votes}/${needed})`;
-            this.btnHudVoteMatch.classList.remove('hidden');
-          }
-        }
-      } else {
-        if (this.btnHudStartMatch) this.btnHudStartMatch.classList.add('hidden');
-        if (this.btnHudVoteMatch) this.btnHudVoteMatch.classList.add('hidden');
-      }
-    } else if (gameState.mode === 'space') {
-      const phase = (gameState.modeState && gameState.modeState.gameState) || 'waiting';
-      const isWaiting = phase === 'waiting' || phase === 'game_over';
-
-      if (isWaiting) {
-        if (isHost) {
-          if (this.btnHudStartMatch) {
-            this.btnHudStartMatch.textContent = '🚀 Oyunu Başlat';
-            this.btnHudStartMatch.className = 'btn btn-primary btn-sm pulse-glow';
-            this.btnHudStartMatch.classList.remove('hidden');
-          }
-          if (this.btnHudVoteMatch) this.btnHudVoteMatch.classList.add('hidden');
-        } else {
-          if (this.btnHudStartMatch) this.btnHudStartMatch.classList.add('hidden');
-          if (this.btnHudVoteMatch) {
-            this.btnHudVoteMatch.textContent = `🗳️ Başlatma Oyu (${votes}/${needed})`;
-            this.btnHudVoteMatch.classList.remove('hidden');
-          }
-        }
-      } else {
-        if (this.btnHudStartMatch) this.btnHudStartMatch.classList.add('hidden');
-        if (this.btnHudVoteMatch) this.btnHudVoteMatch.classList.add('hidden');
-      }
+  updateEscMenu(arg1, arg2, arg3) {
+    let roomData, gameState, myPlayerId;
+    if (arg1 && arg1.players) {
+      gameState = arg1;
+      myPlayerId = arg2;
+      roomData = arg3;
     } else {
-      if (this.btnHudStartMatch) this.btnHudStartMatch.classList.add('hidden');
-      if (this.btnHudVoteMatch) this.btnHudVoteMatch.classList.add('hidden');
+      roomData = arg1;
+      gameState = arg2;
+      myPlayerId = arg3;
+    }
+    if (this.escMenuController && typeof this.escMenuController.updateEscMenu === 'function') {
+      this.escMenuController.updateEscMenu(roomData, gameState, myPlayerId);
     }
   }
 
-  // --- Interactive Mini-Tasks System ---
-
-  openTaskMiniGame(station, onCompleteCallback) {
-    if (!this.modalTaskInteractive || !station) return;
-    this.activeTaskStation = station;
-
-    if (this.taskMiniIcon) this.taskMiniIcon.textContent = station.icon || '⚡';
-    if (this.taskMiniTitle) this.taskMiniTitle.textContent = station.name || 'Görev';
-
-    // Hide all panels first
-    Object.values(this.taskPanels).forEach(panel => {
-      if (panel) panel.classList.add('hidden');
-    });
-
-    if (station.id === 'task_wires_elec') {
-      if (this.taskPanels.wires) this.taskPanels.wires.classList.remove('hidden');
-      this.initWiringTask(onCompleteCallback);
-    } else if (station.id === 'task_shields_sec') {
-      if (this.taskPanels.shields) this.taskPanels.shields.classList.remove('hidden');
-      this.initShieldsTask(onCompleteCallback);
-    } else if (station.id === 'task_scan_medbay') {
-      if (this.taskPanels.medscan) this.taskPanels.medscan.classList.remove('hidden');
-      this.initMedScanTask(onCompleteCallback);
-    } else if (station.id === 'task_trash_cafe') {
-      if (this.taskPanels.trash) this.taskPanels.trash.classList.remove('hidden');
-      this.initTrashTask(onCompleteCallback);
-    } else if (station.id === 'task_reactor_align') {
-      if (this.taskPanels.reactor) this.taskPanels.reactor.classList.remove('hidden');
-      this.initReactorTask(onCompleteCallback);
-    } else if (station.id === 'task_steer_cockpit') {
-      if (this.taskPanels.steer) this.taskPanels.steer.classList.remove('hidden');
-      this.initSteerTask(onCompleteCallback);
+  openMeetingModal(modeState, players, myPlayerId) {
+    if (!this.modalMeeting) return;
+    if (this.meetingReasonText) {
+      this.meetingReasonText.textContent = modeState.meetingCaller
+        ? `${modeState.meetingCaller} acil durum butonuna bastı!`
+        : (modeState.deadBodies?.length ? 'Bir ceset bildirildi!' : 'Acil Durum Toplantısı');
+    }
+    if (this.meetingTimerText) {
+      this.meetingTimerText.textContent = `${Math.ceil(modeState.meetingTimer || 30)}s`;
     }
 
-    this.modalTaskInteractive.classList.remove('hidden');
+    if (this.meetingPlayersGrid) {
+      this.meetingPlayersGrid.innerHTML = '';
+      const alivePlayers = (players || []).filter(p => !p.isSpectator);
+
+      alivePlayers.forEach(p => {
+        const isDead = p.isAlive === false;
+        const card = document.createElement('div');
+        card.className = `meeting-player-card ${isDead ? 'dead' : ''}`;
+        card.innerHTML = `
+          <div class="card-avatar" style="border-color: ${p.color || '#3b82f6'}">${p.avatar || '👤'}</div>
+          <div class="card-name">${this.escapeHtml(p.name)}</div>
+          <div class="card-status">${isDead ? '💀 Ölü' : '❤️ Canlı'}</div>
+        `;
+        this.meetingPlayersGrid.appendChild(card);
+      });
+    }
+
+    this.modalMeeting.classList.remove('hidden');
+  }
+
+  openTaskMiniGame(station, onComplete) {
+    this.tasksController.openTask(station, onComplete);
   }
 
   closeTaskMiniGame() {
-    if (this.taskTimer) {
-      clearInterval(this.taskTimer);
-      this.taskTimer = null;
-    }
-    if (this.modalTaskInteractive) {
-      this.modalTaskInteractive.classList.add('hidden');
-    }
-    this.activeTaskStation = null;
+    this.tasksController.closeTask();
   }
 
-  initWiringTask(onComplete) {
-    const leftCol = document.getElementById('wire-left-col');
-    const rightCol = document.getElementById('wire-right-col');
-    const svg = document.getElementById('wire-svg');
-    if (!leftCol || !rightCol || !svg) return;
-
-    leftCol.innerHTML = '';
-    rightCol.innerHTML = '';
-    svg.innerHTML = '';
-
-    const colors = [
-      { id: 'red', color: '#ef4444', label: '1' },
-      { id: 'blue', color: '#3b82f6', label: '2' },
-      { id: 'yellow', color: '#eab308', label: '3' },
-      { id: 'pink', color: '#ec4899', label: '4' }
-    ];
-
-    const leftColors = [...colors];
-    const rightColors = [...colors].sort(() => Math.random() - 0.5);
-
-    let selectedLeft = null;
-    let connectedCount = 0;
-
-    leftColors.forEach(c => {
-      const node = document.createElement('div');
-      node.className = 'wire-node';
-      node.style.backgroundColor = c.color;
-      node.style.color = c.color;
-      node.dataset.color = c.id;
-
-      node.addEventListener('click', () => {
-        if (node.classList.contains('connected')) return;
-        leftCol.querySelectorAll('.wire-node').forEach(n => n.style.transform = 'scale(1)');
-        node.style.transform = 'scale(1.25)';
-        selectedLeft = { node, color: c.id, elem: node };
-      });
-      leftCol.appendChild(node);
-    });
-
-    rightColors.forEach(c => {
-      const node = document.createElement('div');
-      node.className = 'wire-node';
-      node.style.backgroundColor = c.color;
-      node.style.color = c.color;
-      node.dataset.color = c.id;
-
-      node.addEventListener('click', () => {
-        if (!selectedLeft || node.classList.contains('connected')) return;
-
-        if (selectedLeft.color === c.id) {
-          // Connected successfully!
-          selectedLeft.node.classList.add('connected');
-          node.classList.add('connected');
-          selectedLeft.node.style.transform = 'scale(1)';
-
-          // Draw SVG line
-          const boxRect = document.getElementById('wiring-game-box').getBoundingClientRect();
-          const r1 = selectedLeft.node.getBoundingClientRect();
-          const r2 = node.getBoundingClientRect();
-
-          const x1 = r1.left + r1.width / 2 - boxRect.left;
-          const y1 = r1.top + r1.height / 2 - boxRect.top;
-          const x2 = r2.left + r2.width / 2 - boxRect.left;
-          const y2 = r2.top + r2.height / 2 - boxRect.top;
-
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', x1);
-          line.setAttribute('y1', y1);
-          line.setAttribute('x2', x2);
-          line.setAttribute('y2', y2);
-          line.setAttribute('stroke', c.color);
-          line.setAttribute('stroke-width', '6');
-          line.setAttribute('stroke-linecap', 'round');
-          svg.appendChild(line);
-
-          selectedLeft = null;
-          connectedCount++;
-
-          if (connectedCount >= colors.length) {
-            setTimeout(() => {
-              if (onComplete) onComplete(this.activeTaskStation ? this.activeTaskStation.id : 'task_wires_elec');
-              this.closeTaskMiniGame();
-            }, 500);
-          }
-        }
-      });
-      rightCol.appendChild(node);
-    });
-  }
-
-  initShieldsTask(onComplete) {
-    const grid = document.getElementById('shields-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
-
-    const totalCells = 6;
-    let activeCount = 2; // 2 start active, 4 broken
-
-    for (let i = 0; i < totalCells; i++) {
-      const hex = document.createElement('div');
-      const isBroken = i >= 2;
-      hex.className = `shield-hex ${isBroken ? 'broken' : 'active'}`;
-      hex.innerHTML = isBroken ? '⚠️' : '⚡';
-
-      hex.addEventListener('click', () => {
-        if (!hex.classList.contains('active')) {
-          hex.classList.remove('broken');
-          hex.classList.add('active');
-          hex.innerHTML = '⚡';
-          activeCount++;
-
-          if (activeCount >= totalCells) {
-            setTimeout(() => {
-              if (onComplete) onComplete(this.activeTaskStation ? this.activeTaskStation.id : 'task_shields_sec');
-              this.closeTaskMiniGame();
-            }, 500);
-          }
-        }
-      });
-      grid.appendChild(hex);
+  showRoleReveal(role, team) {
+    if (this.vampireController && typeof this.vampireController.showRoleReveal === 'function') {
+      this.vampireController.showRoleReveal(role, team);
     }
   }
 
-  initMedScanTask(onComplete) {
-    const bar = document.getElementById('medscan-bar-fill');
-    const statusText = document.getElementById('medscan-status-text');
-    if (!bar) return;
-
-    bar.style.width = '0%';
-    if (statusText) statusText.textContent = 'Biyometrik Tarama Başlatılıyor...';
-
-    let progress = 0;
-    if (this.taskTimer) clearInterval(this.taskTimer);
-
-    this.taskTimer = setInterval(() => {
-      progress += 5;
-      bar.style.width = `${progress}%`;
-      if (statusText) statusText.textContent = `Biyometrik Tarama: %${progress}`;
-
-      if (progress >= 100) {
-        clearInterval(this.taskTimer);
-        this.taskTimer = null;
-        if (statusText) statusText.textContent = '✅ Tarama Tamamlandı - Sağlıklı!';
-
-        setTimeout(() => {
-          if (onComplete) onComplete(this.activeTaskStation ? this.activeTaskStation.id : 'task_scan_medbay');
-          this.closeTaskMiniGame();
-        }, 600);
-      }
-    }, 100);
+  showVampireRoleReveal(role, team) {
+    this.vampireController.showRoleReveal(role, team);
   }
 
-  initTrashTask(onComplete) {
-    const handle = document.getElementById('trash-lever-handle');
-    const particles = document.getElementById('trash-particles');
-    const track = document.getElementById('trash-lever-track');
-    const btnPull = document.getElementById('btn-pull-trash');
-
-    if (particles) particles.classList.remove('emptied');
-    if (handle) handle.classList.remove('pulled');
-
-    let completed = false;
-    const triggerPull = () => {
-      if (completed) return;
-      completed = true;
-
-      if (handle) handle.classList.add('pulled');
-      if (particles) particles.classList.add('emptied');
-      if (btnPull) {
-        btnPull.textContent = '🚀 ÇÖPLER UZAYA FIRLATILDI! ✅';
-        btnPull.className = 'btn btn-success btn-block';
-      }
-
-      setTimeout(() => {
-        if (onComplete) onComplete(this.activeTaskStation ? this.activeTaskStation.id : 'task_trash_cafe');
-        this.closeTaskMiniGame();
-      }, 750);
-    };
-
-    if (handle) {
-      handle.onclick = (e) => { e.stopPropagation(); triggerPull(); };
-      handle.ontouchstart = (e) => { e.stopPropagation(); triggerPull(); };
-    }
-    if (track) {
-      track.onclick = triggerPull;
-    }
-    if (btnPull) {
-      btnPull.textContent = '🗑️ ÇÖP KAPAĞINI AÇ & UZAYA BOŞALT';
-      btnPull.className = 'btn btn-danger btn-block';
-      btnPull.onclick = triggerPull;
-    }
+  openVampireNightModal(role, playersMeta, myPlayerId, onAction) {
+    this.vampireController.openNightModal(role, playersMeta, myPlayerId, onAction);
   }
 
-  initReactorTask(onComplete) {
-    const grid = document.getElementById('reactor-pad-grid');
-    const display = document.getElementById('reactor-seq-display');
-    if (!grid) return;
-    grid.innerHTML = '';
-
-    if (display) display.textContent = 'Sıra: 1 ➔ 2 ➔ 3 ➔ 4 ➔ 5';
-
-    const numbers = [1, 2, 3, 4, 5].sort(() => Math.random() - 0.5);
-    let expected = 1;
-
-    numbers.forEach(num => {
-      const btn = document.createElement('button');
-      btn.className = 'reactor-btn';
-      btn.textContent = num;
-
-      btn.addEventListener('click', () => {
-        if (num === expected) {
-          btn.classList.add('correct');
-          expected++;
-          if (display) display.textContent = `Doğru! Sonraki: ${expected <= 5 ? expected : 'Tamamlandı! ✅'}`;
-
-          if (expected > 5) {
-            setTimeout(() => {
-              if (onComplete) onComplete(this.activeTaskStation ? this.activeTaskStation.id : 'task_reactor_align');
-              this.closeTaskMiniGame();
-            }, 500);
-          }
-        } else {
-          // Wrong button, reset!
-          expected = 1;
-          if (display) display.textContent = '❌ Hatalı Sıra! Baştan Başla: 1';
-          grid.querySelectorAll('.reactor-btn').forEach(b => b.classList.remove('correct'));
-        }
-      });
-      grid.appendChild(btn);
-    });
+  closeVampireNightModal() {
+    this.vampireController.closeNightModal();
   }
 
-  initSteerTask(onComplete) {
-    const target = document.getElementById('radar-ship-target');
-    const status = document.getElementById('radar-status');
-    if (!target) return;
-
-    target.style.left = `${15 + Math.random() * 25}%`;
-    target.style.top = `${20 + Math.random() * 40}%`;
-    if (status) status.textContent = 'Hedef sapması: %45 - Hedefe Tıkla!';
-
-    target.onclick = () => {
-      target.style.left = '50%';
-      target.style.top = '50%';
-      target.style.transform = 'translate(-50%, -50%) scale(1.2)';
-      if (status) status.textContent = '✅ Rota Kilitlendi!';
-
-      setTimeout(() => {
-        if (onComplete) onComplete(this.activeTaskStation ? this.activeTaskStation.id : 'task_steer_cockpit');
-        this.closeTaskMiniGame();
-      }, 500);
-    };
+  openConquestQuestionModal(qData, timer, onSubmit) {
+    this.conquestController.openQuestionModal(qData, timer, onSubmit);
   }
 
-  showRoleReveal(role) {
-    if (!this.roleRevealBanner) return;
-    const isImpostor = role === 'impostor';
-    this.roleRevealTitle.textContent = isImpostor ? 'SEN BİR CASUSSUN 🔪' : 'MÜRETTEBATSIN 🛠️';
-    this.roleRevealTitle.style.color = isImpostor ? '#ef4444' : '#60a5fa';
-    this.roleRevealDesc.textContent = isImpostor ? 'Mürettebata çaktırmadan herkesi avla!' : 'Tüm görevleri tamamla ve casusu bul!';
-    this.roleRevealBanner.classList.remove('hidden');
-
-    setTimeout(() => {
-      this.roleRevealBanner.classList.add('hidden');
-    }, 4000);
-  }
-
-  renderLeaderboard(leaderboard, myPlayerId) {
-    if (!this.leaderboardList) return;
-    this.leaderboardList.innerHTML = '';
-
-    if (leaderboard.length === 0) {
-      this.leaderboardList.innerHTML = `<div class="lb-empty">Liderlik tablosu hazırlanıyor...</div>`;
-      return;
-    }
-
-    const medals = ['🥇', '🥈', '🥉'];
-
-    leaderboard.forEach((item, index) => {
-      const isMe = item.id === myPlayerId;
-      const rankBadge = index < 3 ? medals[index] : `#${index + 1}`;
-      const div = document.createElement('div');
-      div.className = `lb-item ${isMe ? 'lb-me' : ''}`;
-      div.innerHTML = `
-        <span class="lb-rank">${rankBadge}</span>
-        <span class="lb-avatar">${item.avatar || '👤'}</span>
-        <span class="lb-name" style="color: ${item.color || '#fff'}">${this.escapeHtml(item.name)}${isMe ? ' (Sen)' : ''}</span>
-        <span class="lb-score">${item.score}</span>
-      `;
-      this.leaderboardList.appendChild(div);
-    });
-  }
-
-  showGoalBanner(title, scorer) {
-    this.goalText.textContent = title;
-    this.goalScorer.textContent = scorer || '';
-    this.goalAnnouncement.classList.remove('hidden');
-
-    setTimeout(() => {
-      this.goalAnnouncement.classList.add('hidden');
-    }, 2800);
-  }
-
-  addChatMessage(sender, text, color) {
-    const item = document.createElement('div');
-    item.className = 'chat-item';
-    item.innerHTML = `<span class="chat-sender" style="color: ${color || '#38bdf8'}">${this.escapeHtml(sender)}:</span> <span class="chat-text">${this.escapeHtml(text)}</span>`;
-
-    this.chatMessages.appendChild(item);
-    this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
-
-    // Fade and remove old messages after 15s to keep screen clean
-    setTimeout(() => {
-      if (item.parentNode) {
-        item.style.opacity = '0.3';
-      }
-    }, 12000);
-  }
-
-  showVampireRoleReveal(role, vampireTeam) {
-    if (!this.modalVampireRole) return;
-    const roleInfo = {
-      vampire: {
-        icon: '🧛',
-        title: 'SEN BİR VAMPİRSİN',
-        color: '#ef4444',
-        desc: 'Gece çöktüğünde diğer vampirlerle birlikte kurbanını seç ve köylüleri gizlice avla!'
-      },
-      doctor: {
-        icon: '🧙‍♂️',
-        title: 'SEN BİR DOKTORSUN',
-        color: '#06b6d4',
-        desc: 'Her gece bir köylüyü koruma altına alarak vampir saldırılarından kurtar!'
-      },
-      seer: {
-        icon: '🔮',
-        title: 'SEN BİR KAHİNSİN',
-        color: '#a855f7',
-        desc: 'Her gece bir oyuncunun kimliğini sorgula ve kimin vampir olduğunu öğren!'
-      },
-      hunter: {
-        icon: '🏹',
-        title: 'SEN BİR AVCISIN',
-        color: '#f59e0b',
-        desc: 'Öldürüldüğünde son kurşununla şüphelendiğin bir kişiyi yanında götür!'
-      },
-      villager: {
-        icon: '🧑‍🌾',
-        title: 'SEN BİR KÖYLÜSÜN',
-        color: '#10b981',
-        desc: 'Masum bir kasaba sakinisin. Gündüz tartışmalarına katıl ve oylamayla vampirleri as!'
-      }
-    };
-
-    const r = roleInfo[role] || roleInfo.villager;
-    if (this.vampireRevealIcon) this.vampireRevealIcon.textContent = r.icon;
-    if (this.vampireRevealTitle) {
-      this.vampireRevealTitle.textContent = r.title;
-      this.vampireRevealTitle.style.color = r.color;
-    }
-    if (this.vampireRevealDesc) this.vampireRevealDesc.textContent = r.desc;
-
-    if (this.vampireTeamList) {
-      this.vampireTeamList.innerHTML = '';
-      if (role === 'vampire' && Array.isArray(vampireTeam) && vampireTeam.length > 0) {
-        const teamHeader = document.createElement('div');
-        teamHeader.innerHTML = '<b>🩸 Diğer Vampirler:</b>';
-        teamHeader.style.marginBottom = '6px';
-        this.vampireTeamList.appendChild(teamHeader);
-
-        vampireTeam.forEach(t => {
-          const pill = document.createElement('div');
-          pill.className = 'vampire-teammate-pill';
-          pill.textContent = `${t.avatar || '🧛'} ${t.name}`;
-          this.vampireTeamList.appendChild(pill);
-        });
-      }
-    }
-
-    this.modalVampireRole.classList.remove('hidden');
-  }
-
-  openVampireNightModal(role, playersMeta, myPlayerId, onSelectAction, onSkipAction) {
-    if (!this.modalVampireAction) return;
-
-    const titles = {
-      vampire: { icon: '🧛', title: 'VAMPİR AV EYLEMİ', desc: 'Kanını emeceğiniz kurbanı seçin:' },
-      doctor: { icon: '🧙‍♂️', title: 'DOKTOR ŞİFA EYLEMİ', desc: 'Bu gece korumak istediğiniz köylüyü seçin:' },
-      seer: { icon: '🔮', title: 'KAHİN KEHANET EYLEMİ', desc: 'Kimliğini sorgulamak istediğiniz oyuncuyu seçin:' }
-    };
-
-    const t = titles[role] || { icon: '🌙', title: 'GECE EYLEMİ', desc: 'Hedefinizi seçin:' };
-    if (this.vampireActionIcon) this.vampireActionIcon.textContent = t.icon;
-    if (this.vampireActionTitle) this.vampireActionTitle.textContent = t.title;
-    if (this.vampireActionDesc) this.vampireActionDesc.textContent = t.desc;
-
-    if (this.vampireActionGrid) {
-      this.vampireActionGrid.innerHTML = '';
-      const aliveTargets = (playersMeta || []).filter(p => p.isAlive && p.id !== myPlayerId);
-
-      aliveTargets.forEach(target => {
-        const btn = document.createElement('button');
-        btn.className = 'btn-vampire-target';
-        btn.innerHTML = `
-          <span class="vampire-target-avatar">${target.avatar || '👤'}</span>
-          <span class="vampire-target-name">${this.escapeHtml(target.name)}</span>
-        `;
-        btn.addEventListener('click', () => {
-          this.vampireActionGrid.querySelectorAll('.btn-vampire-target').forEach(b => b.classList.remove('selected-target'));
-          btn.classList.add('selected-target');
-          if (onSelectAction) onSelectAction(target.id);
-        });
-        this.vampireActionGrid.appendChild(btn);
-      });
-    }
-
-    if (this.btnVampireActionSkip) {
-      this.btnVampireActionSkip.onclick = () => {
-        if (onSkipAction) onSkipAction();
-        this.modalVampireAction.classList.add('hidden');
-      };
-    }
-
-    this.modalVampireAction.classList.remove('hidden');
-  }
-
-  openVampireTrialModal(playersMeta, myPlayerId, onVote, onSkipVote) {
-    if (!this.modalVampireTrial) return;
-
-    if (this.trialCandidatesGrid) {
-      this.trialCandidatesGrid.innerHTML = '';
-      const aliveCandidates = (playersMeta || []).filter(p => p.isAlive);
-
-      aliveCandidates.forEach(cand => {
-        const card = document.createElement('div');
-        card.className = 'trial-candidate-card';
-        card.dataset.id = cand.id;
-        card.innerHTML = `
-          <div>
-            <span>${cand.avatar || '👤'}</span>
-            <b>${this.escapeHtml(cand.name)}${cand.id === myPlayerId ? ' (Sen)' : ''}</b>
-          </div>
-          <span class="trial-vote-count-badge" id="trial-votes-${cand.id}">0</span>
-        `;
-        card.addEventListener('click', () => {
-          this.trialCandidatesGrid.querySelectorAll('.trial-candidate-card').forEach(c => c.classList.remove('voted'));
-          card.classList.add('voted');
-          if (onVote) onVote(cand.id);
-        });
-        this.trialCandidatesGrid.appendChild(card);
-      });
-    }
-
-    if (this.btnTrialSkipVote) {
-      this.btnTrialSkipVote.onclick = () => {
-        if (this.trialCandidatesGrid) {
-          this.trialCandidatesGrid.querySelectorAll('.trial-candidate-card').forEach(c => c.classList.remove('voted'));
-        }
-        if (onSkipVote) onSkipVote();
-      };
-    }
-
-    this.modalVampireTrial.classList.remove('hidden');
-  }
-
-  updateVampireTrialVoteCounts(counts = {}, skipCount = 0) {
-    if (this.trialCandidatesGrid) {
-      for (const [id, count] of Object.entries(counts)) {
-        const badge = document.getElementById(`trial-votes-${id}`);
-        if (badge) badge.textContent = count;
-      }
-    }
-    if (this.trialSkipCount) {
-      this.trialSkipCount.textContent = skipCount;
-    }
-  }
-
-  showVampireSeerResult(targetName, isVampire) {
-    if (!this.modalVampireSeerResult || !this.seerResultContent) return;
-    this.seerResultContent.className = `seer-result-content ${isVampire ? 'seer-result-vampire' : 'seer-result-innocent'}`;
-    this.seerResultContent.innerHTML = isVampire
-      ? `🚨 <b>${this.escapeHtml(targetName)}</b> bir <b>VAMPİR</b>!`
-      : `✨ <b>${this.escapeHtml(targetName)}</b> bir <b>MASUM</b> (Vampir Değil).`;
-
-    this.modalVampireSeerResult.classList.remove('hidden');
-  }
-
-  bindConquestKeypad() {
-    const numButtons = document.querySelectorAll('.conquest-keypad .btn-num[data-num]');
-    numButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const num = btn.getAttribute('data-num');
-        if (this.conquestAnswerInput) {
-          this.conquestAnswerInput.value = (this.conquestAnswerInput.value || '') + num;
-          this.conquestAnswerInput.focus();
-        }
-      });
-    });
-
-    if (this.btnConquestClear) {
-      this.btnConquestClear.addEventListener('click', () => {
-        if (this.conquestAnswerInput) {
-          this.conquestAnswerInput.value = '';
-          this.conquestAnswerInput.focus();
-        }
-      });
-    }
-
-    if (this.btnConquestBackspace) {
-      this.btnConquestBackspace.addEventListener('click', () => {
-        if (this.conquestAnswerInput) {
-          const val = this.conquestAnswerInput.value || '';
-          this.conquestAnswerInput.value = val.slice(0, -1);
-          this.conquestAnswerInput.focus();
-        }
-      });
-    }
-
-    const submitAction = () => {
-      if (!this.conquestAnswerInput) return;
-      const rawVal = this.conquestAnswerInput.value.trim();
-      if (rawVal === '') return;
-      const parsed = parseFloat(rawVal);
-      if (isNaN(parsed)) return;
-
-      if (this.btnConquestSubmitAnswer) {
-        this.btnConquestSubmitAnswer.disabled = true;
-        this.btnConquestSubmitAnswer.textContent = '✅ Cevap Gönderildi';
-      }
-
-      if (this.onConquestSubmitAnswer) {
-        this.onConquestSubmitAnswer(parsed);
-      }
-    };
-
-    if (this.btnConquestSubmitAnswer) {
-      this.btnConquestSubmitAnswer.addEventListener('click', submitAction);
-    }
-
-    if (this.conquestAnswerInput) {
-      this.conquestAnswerInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          submitAction();
-        }
-      });
-    }
-  }
-
-  openConquestQuestionModal(questionData, timerSec, onSubmit) {
-    if (!this.modalConquestQuestion) return;
-    this.onConquestSubmitAnswer = onSubmit || this.onConquestSubmitAnswer;
-
-    if (this.conquestCatBadge) {
-      this.conquestCatBadge.textContent = `📚 ${questionData.category || 'GENEL KÜLTÜR'}`;
-    }
-    if (this.conquestQuestionText) {
-      this.conquestQuestionText.textContent = questionData.question || '...';
-    }
-    if (this.conquestUnitHint) {
-      this.conquestUnitHint.textContent = `Cevap Birimi: ${questionData.unit || 'Sayı'}`;
-    }
-    if (this.conquestAnswerInput) {
-      this.conquestAnswerInput.value = '';
-      this.conquestAnswerInput.disabled = false;
-      setTimeout(() => this.conquestAnswerInput.focus(), 100);
-    }
-    if (this.btnConquestSubmitAnswer) {
-      this.btnConquestSubmitAnswer.disabled = false;
-      this.btnConquestSubmitAnswer.textContent = '⚔️ Cevabı Onayla (Enter)';
-    }
-    if (this.conquestQuestionTimer) {
-      this.conquestQuestionTimer.textContent = `${timerSec}s`;
-    }
-
-    this.modalConquestQuestion.classList.remove('hidden');
-  }
-
-  openConquestResultModal(resultData, players) {
-    if (!this.modalConquestResult) return;
-    if (this.modalConquestQuestion) this.modalConquestQuestion.classList.add('hidden');
-
-    if (this.conquestCorrectAnswerVal) {
-      this.conquestCorrectAnswerVal.textContent = `${resultData.correctAnswer} ${resultData.unit || ''}`;
-    }
-
-    if (this.conquestPodiumList) {
-      this.conquestPodiumList.innerHTML = '';
-      const rankings = resultData.rankings || [];
-
-      rankings.forEach((entry, idx) => {
-        const item = document.createElement('div');
-        item.className = `conquest-podium-item ${idx === 0 ? 'winner' : ''}`;
-
-        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
-        const isExact = entry.diff === 0;
-        const diffText = entry.answer === null
-          ? 'Cevap verilmedi'
-          : isExact
-            ? '🎯 Tam İsabet! (Fark: 0)'
-            : `Fark: ${entry.diff} (${entry.timeTaken.toFixed(1)}s)`;
-
-        item.innerHTML = `
-          <div class="podium-rank-badge">${medal}</div>
-          <div class="podium-player-name">${this.escapeHtml(entry.username || 'Oyuncu')}</div>
-          <div class="podium-stats">
-            <span class="podium-guess">${entry.answer !== null ? entry.answer : '-'}</span>
-            <span class="podium-diff ${isExact ? 'exact' : ''}">${diffText}</span>
-          </div>
-        `;
-        this.conquestPodiumList.appendChild(item);
-      });
-    }
-
-    this.modalConquestResult.classList.remove('hidden');
+  openConquestResultModal(resData, players) {
+    this.conquestController.openResultModal(resData, players);
   }
 
   escapeHtml(str) {

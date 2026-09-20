@@ -6,11 +6,13 @@ export class Room {
     this.id = id;
     this.name = name;
     this.modeType = modeType;
+    this.options = typeof options === 'object' ? options : { maxPlayers: options };
     this.maxPlayers = typeof options === 'number' ? options : (options.maxPlayers || 8);
     this.isPrivate = !!options.isPrivate;
     this.speedMultiplier = options.speedMultiplier || 1.0;
     this.matchDuration = options.matchDuration || 180;
     this.tackleEnabled = options.tackleEnabled !== undefined ? !!options.tackleEnabled : true;
+    this.mapTheme = options.mapTheme || 'spaceship';
     this.createdAt = Date.now();
 
     this.players = new Map(); // id -> PlayerBody
@@ -32,7 +34,7 @@ export class Room {
 
   initGameMode(modeType) {
     this.modeType = modeType;
-    this.mode = modeRegistry.createMode(modeType, this);
+    this.mode = modeRegistry.createMode(modeType, this, this.options);
   }
 
   restartMatch(callerName = 'Host') {
@@ -234,6 +236,13 @@ export class Room {
     }
   }
 
+  sendToPlayer(playerId, data) {
+    const player = this.players.get(playerId);
+    if (player && player.ws && player.ws.readyState === 1) { // OPEN
+      player.ws.send(JSON.stringify(data));
+    }
+  }
+
   tick() {
     const now = Date.now();
     const dt = Math.min((now - this.lastTickTime) / 1000, 0.1);
@@ -321,6 +330,9 @@ export class Room {
       id: this.id,
       name: this.name,
       mode: this.modeType,
+      mapTheme: this.mapTheme || 'spaceship',
+      mapName: this.mode?.mapName || 'Uzay Gemisi',
+      mapIcon: this.mode?.mapIcon || '🚀',
       playerCount: this.players.size,
       maxPlayers: this.maxPlayers,
       speedMultiplier: this.speedMultiplier || 1.0,

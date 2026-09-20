@@ -8,12 +8,13 @@ export class ConquestClientMode extends BaseClientMode {
     this.animTime = 0;
     this.hoveredTerritoryId = null;
     this.selectedTerritoryId = null;
-    this.territoryHitboxes = [];
     this.pointerListenerBound = false;
     this.rendererRef = null;
     this.socketRef = null;
     this.myPlayerId = null;
     this.lastModeState = null;
+    this.cityLabelsContainer = null;
+    this.cityLabelsMap = new Map();
   }
 
   isFixedArena() {
@@ -23,8 +24,8 @@ export class ConquestClientMode extends BaseClientMode {
   getArenaDimensions(gameState) {
     const s = (gameState && gameState.modeState) || {};
     return {
-      width: s.width || 1400,
-      height: s.height || 900
+      width: s.width || 1600,
+      height: s.height || 1000
     };
   }
 
@@ -46,6 +47,15 @@ export class ConquestClientMode extends BaseClientMode {
     if (ui.modalConquestQuestion) ui.modalConquestQuestion.classList.add('hidden');
     if (ui.modalConquestResult) ui.modalConquestResult.classList.add('hidden');
     this.unbindCanvasInteraction();
+    this.destroyCityLabels();
+  }
+
+  destroyCityLabels() {
+    if (this.cityLabelsContainer && this.cityLabelsContainer.parent) {
+      this.cityLabelsContainer.parent.removeChild(this.cityLabelsContainer);
+    }
+    this.cityLabelsMap.clear();
+    this.cityLabelsContainer = null;
   }
 
   setContext(renderer, socket, myPlayerId) {
@@ -59,20 +69,29 @@ export class ConquestClientMode extends BaseClientMode {
     const canvas = document.getElementById('game-canvas');
     if (!canvas) return;
 
-    this._onPointerMove = (e) => {
-      if (!this.rendererRef || !this.lastModeState) return;
+    const getEventPos = (e) => {
       const rect = canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
-      const worldPos = this.rendererRef.screenToWorld(mouseX, mouseY);
+      if (this.rendererRef && typeof this.rendererRef.screenToWorld === 'function') {
+        return this.rendererRef.screenToWorld(mouseX, mouseY);
+      }
+      const cx = (canvas.width || 800) / 2;
+      const cy = (canvas.height || 600) / 2;
+      return { x: mouseX - cx, y: mouseY - cy };
+    };
+
+    this._onPointerMove = (e) => {
+      if (!this.lastModeState) return;
+      const worldPos = getEventPos(e);
 
       let found = null;
       const territories = this.lastModeState.territories || [];
       for (const t of territories) {
         const dx = worldPos.x - t.x;
         const dy = worldPos.y - t.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist <= 48) {
+        const dist = Math.hypot(dx, dy);
+        if (dist <= 55) {
           found = t.id;
           break;
         }
@@ -81,25 +100,67 @@ export class ConquestClientMode extends BaseClientMode {
       canvas.style.cursor = found ? 'pointer' : 'default';
     };
 
-    this._onPointerDown = (e) => {
-      if (e.button !== 0) return;
-      if (!this.hoveredTerritoryId || !this.lastModeState) return;
-
+    const handlePickAtPos = (worldPos) => {
+      if (!this.lastModeState) return;
       const s = this.lastModeState;
-      if (s.phase === 'conquer_pick' && s.pickingPlayerId === this.myPlayerId) {
-        const territory = (s.territories || []).find(t => t.id === this.hoveredTerritoryId);
-        // Can claim if unowned or opponent owned
-        if (territory && territory.ownerId !== this.myPlayerId) {
-          if (this.socketRef) {
-            this.socketRef.emit('conquest_claim_territory', { territoryId: territory.id });
-            if (window.audio) window.audio.playSwordClash();
+      const phase = s.phase || s.gameState;
+      const pickerId = s.pickingPlayerId || s.activePickerId;
+      const myId = this.myPlayerId || window.gameApp?.socket?.myPlayerId;
+      const isPickPhase = phase === 'conquer_pick';
+      const isMyPick = isPickPhase && pickerId === myId;
+
+      const territories = s.territories || [];
+      let targetTerritory = null;
+      for (const t of territories) {
+        const dist = Math.hypot(worldPos.x - t.x, worldPos.y - t.y);
+        if (dist <= 65) {
+          targetTerritory = t;
+          break;
+        }
+      }
+
+      if (isPickPhase && isMyPick && targetTerritory) {
+        if (targetTerritory.ownerId !== myId) {
+          const socketObj = this.socketRef || window.gameApp?.socket;
+          if (socketObj) {
+            socketObj.sendAction({
+              type: 'claim_territory',
+              territoryId: targetTerritory.id
+            });
+            if (window.audio && typeof window.audio.playSwordClash === 'function') {
+              window.audio.playSwordClash();
+            }
           }
         }
       }
     };
 
+    this._onPointerDown = (e) => {
+      if (e.button !== 0) return;
+      const worldPos = getEventPos(e);
+      handlePickAtPos(worldPos);
+    };
+
+    this._onTouchEnd = (e) => {
+      if (!e.changedTouches || e.changedTouches.length === 0) return;
+      const touch = e.changedTouches[0];
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = touch.clientX - rect.left;
+      const mouseY = touch.clientY - rect.top;
+      let worldPos;
+      if (this.rendererRef && typeof this.rendererRef.screenToWorld === 'function') {
+        worldPos = this.rendererRef.screenToWorld(mouseX, mouseY);
+      } else {
+        const cx = (canvas.width || 800) / 2;
+        const cy = (canvas.height || 600) / 2;
+        worldPos = { x: mouseX - cx, y: mouseY - cy };
+      }
+      handlePickAtPos(worldPos);
+    };
+
     canvas.addEventListener('mousemove', this._onPointerMove);
     canvas.addEventListener('mousedown', this._onPointerDown);
+    canvas.addEventListener('touchend', this._onTouchEnd, { passive: true });
     this.pointerListenerBound = true;
   }
 
@@ -108,6 +169,7 @@ export class ConquestClientMode extends BaseClientMode {
     if (canvas && this.pointerListenerBound) {
       canvas.removeEventListener('mousemove', this._onPointerMove);
       canvas.removeEventListener('mousedown', this._onPointerDown);
+      if (this._onTouchEnd) canvas.removeEventListener('touchend', this._onTouchEnd);
       canvas.style.cursor = 'default';
       this.pointerListenerBound = false;
     }
@@ -116,20 +178,19 @@ export class ConquestClientMode extends BaseClientMode {
   renderEnvironment(renderer, g, gameState) {
     const s = (gameState && gameState.modeState) || {};
     this.lastModeState = s;
-    const w = s.width || 1400;
-    const h = s.height || 900;
+    const w = s.width || 1600;
+    const h = s.height || 1000;
     const hw = w / 2;
     const hh = h / 2;
     this.animTime += 0.03;
 
-    // 1. Medieval War Room Parchment / Tactical Sea Map Base
-    // Sea / Deep Ocean background
+    // 1. Medieval War Room Tactical Parchment & Sea Base
     g.beginFill(0x0a192f);
     g.drawRect(-hw - 100, -hh - 100, w + 200, h + 200);
     g.endFill();
 
     // Map Landmass outline / Anatolia aesthetic plate
-    g.lineStyle(4, 0x1e3a5f, 0.8);
+    g.lineStyle(4, 0x1e3a5f, 0.85);
     g.beginFill(0x132743, 0.95);
     g.drawRoundedRect(-hw + 40, -hh + 40, w - 80, h - 80, 24);
     g.endFill();
@@ -148,16 +209,32 @@ export class ConquestClientMode extends BaseClientMode {
     // Compass Rose in top right corner
     const crX = hw - 130;
     const crY = -hh + 130;
-    g.lineStyle(2, 0xd4af37, 0.4);
+    g.lineStyle(2, 0xd4af37, 0.45);
     g.drawCircle(crX, crY, 40);
     g.drawCircle(crX, crY, 60);
 
     // 2. Connection Roads / Trade Routes Between Cities
-    const connections = s.connections || [];
+    const connections = s.connections || [
+      ['canakkale', 'istanbul'], ['canakkale', 'izmir'], ['canakkale', 'bursa'],
+      ['istanbul', 'bursa'], ['istanbul', 'eskisehir'],
+      ['izmir', 'bursa'], ['izmir', 'antalya'],
+      ['bursa', 'eskisehir'], ['bursa', 'antalya'],
+      ['eskisehir', 'ankara'], ['eskisehir', 'konya'],
+      ['antalya', 'konya'], ['antalya', 'adana'],
+      ['ankara', 'samsun'], ['ankara', 'konya'], ['ankara', 'sivas'],
+      ['konya', 'adana'], ['konya', 'sivas'],
+      ['samsun', 'sivas'], ['samsun', 'trabzon'],
+      ['adana', 'gaziantep'],
+      ['sivas', 'erzurum'], ['sivas', 'gaziantep'], ['sivas', 'diyarbakir'],
+      ['trabzon', 'erzurum'],
+      ['gaziantep', 'diyarbakir'],
+      ['erzurum', 'diyarbakir'], ['erzurum', 'van'],
+      ['diyarbakir', 'van']
+    ];
     const territories = s.territories || [];
     const territoryMap = new Map(territories.map(t => [t.id, t]));
 
-    g.lineStyle(3, 0x334e68, 0.6);
+    g.lineStyle(3, 0x334e68, 0.65);
     connections.forEach(([idA, idB]) => {
       const a = territoryMap.get(idA);
       const b = territoryMap.get(idB);
@@ -169,8 +246,10 @@ export class ConquestClientMode extends BaseClientMode {
 
     // 3. Render Territories (Castles & Fortresses)
     const players = gameState.players || [];
-    const isPickPhase = s.phase === 'conquer_pick';
-    const isMyPick = isPickPhase && s.pickingPlayerId === this.myPlayerId;
+    const phase = s.phase || s.gameState;
+    const pickerId = s.pickingPlayerId || s.activePickerId;
+    const isPickPhase = phase === 'conquer_pick';
+    const isMyPick = isPickPhase && pickerId === this.myPlayerId;
 
     territories.forEach(t => {
       const owner = players.find(p => p.id === t.ownerId);
@@ -183,82 +262,162 @@ export class ConquestClientMode extends BaseClientMode {
       let ringColor = 0x64748b;
 
       if (isOwned) {
-        // Convert hex color string like '#ff4444' or number
         if (owner.color) {
           baseColor = typeof owner.color === 'string'
             ? parseInt(owner.color.replace('#', '0x'), 16)
             : owner.color;
+          ringColor = baseColor;
+        } else if (t.color) {
+          baseColor = typeof t.color === 'string'
+            ? parseInt(t.color.replace('#', '0x'), 16)
+            : t.color;
           ringColor = baseColor;
         }
       }
 
       // If it's my pick turn and territory is selectable
       if (isMyPick && !isMine) {
-        const pulse = 48 + Math.sin(this.animTime * 4) * 6;
-        g.lineStyle(3, 0xf59e0b, 0.85);
+        const pulse = 48 + Math.sin(this.animTime * 5) * 8;
+        g.lineStyle(4, 0xf59e0b, 0.95);
         g.drawCircle(t.x, t.y, pulse);
       }
 
       // Territory outer circle / glow
       if (isHovered) {
         g.lineStyle(4, 0xfacc15, 1);
-        g.beginFill(baseColor, 0.85);
+        g.beginFill(baseColor, 0.9);
         g.drawCircle(t.x, t.y, 42);
         g.endFill();
       } else {
-        g.lineStyle(3, ringColor, isOwned ? 0.9 : 0.6);
+        g.lineStyle(3, ringColor, isOwned ? 0.95 : 0.65);
         g.beginFill(baseColor, isOwned ? 0.85 : 0.45);
         g.drawCircle(t.x, t.y, 36);
         g.endFill();
       }
 
       // Castle Icon / Fort symbol inside node
-      g.lineStyle(2, 0xffffff, 0.9);
-      // Fortress battlement
+      g.lineStyle(2, 0xffffff, 0.95);
       const bx = t.x - 12;
       const by = t.y - 10;
-      g.beginFill(0xffffff, 0.9);
+      g.beginFill(0xffffff, 0.95);
       g.drawRect(bx, by + 6, 24, 14);
-      // Crenellations (3 towers)
+      // Crenellations
       g.drawRect(bx, by, 6, 7);
       g.drawRect(bx + 9, by, 6, 7);
       g.drawRect(bx + 18, by, 6, 7);
       g.endFill();
 
       // Gate archway
-      g.beginFill(0x0f172a, 0.9);
+      g.beginFill(0x0f172a, 0.95);
       g.drawRect(t.x - 4, t.y + 10, 8, 10);
       g.endFill();
 
-      // Text label: City Name + Points
-      // (Rendered directly or via Pixi text in PIXI rendering)
+      // Point Ribbon Badge below node
+      g.lineStyle(1.5, ringColor, 0.85);
+      g.beginFill(0x0f172a, 0.85);
+      g.drawRoundedRect(t.x - 30, t.y + 26, 60, 18, 5);
+      g.endFill();
     });
 
     // 4. Map Border styling
     g.lineStyle(6, 0xd4af37, 0.8);
     g.drawRoundedRect(-hw + 40, -hh + 40, w - 80, h - 80, 24);
+
+    // 5. Update City Labels
+    this.updateCityLabels(renderer, territories, players);
+  }
+
+  updateCityLabels(renderer, territories, players) {
+    if (!renderer || !renderer.world || !renderer.isWebGL || typeof PIXI === 'undefined') return;
+
+    if (!this.cityLabelsContainer) {
+      this.cityLabelsContainer = new PIXI.Container();
+      renderer.world.addChild(this.cityLabelsContainer);
+    }
+
+    const currentIds = new Set();
+
+    territories.forEach(t => {
+      currentIds.add(t.id);
+      let labelObj = this.cityLabelsMap.get(t.id);
+
+      const owner = players.find(p => p.id === t.ownerId);
+      const ownerName = owner ? owner.name : (t.ownerName || null);
+      const displayName = `${t.icon || '🏰'} ${t.name}`;
+      const pointText = `${t.points} P`;
+
+      if (!labelObj) {
+        const titleText = new PIXI.Text(displayName, {
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: 13,
+          fontWeight: 'bold',
+          fill: 0xffffff,
+          align: 'center',
+          dropShadow: true,
+          dropShadowColor: 0x000000,
+          dropShadowBlur: 4,
+          dropShadowDistance: 2
+        });
+        titleText.anchor.set(0.5, 1);
+
+        const ptsText = new PIXI.Text(pointText, {
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: 11,
+          fontWeight: 'bold',
+          fill: 0xfacc15,
+          align: 'center'
+        });
+        ptsText.anchor.set(0.5, 0);
+
+        const bannerText = new PIXI.Text('', {
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: 11,
+          fontWeight: 'bold',
+          fill: 0x38bdf8,
+          align: 'center',
+          dropShadow: true,
+          dropShadowColor: 0x000000,
+          dropShadowBlur: 3
+        });
+        bannerText.anchor.set(0.5, 1);
+
+        this.cityLabelsContainer.addChild(titleText);
+        this.cityLabelsContainer.addChild(ptsText);
+        this.cityLabelsContainer.addChild(bannerText);
+
+        labelObj = { titleText, ptsText, bannerText };
+        this.cityLabelsMap.set(t.id, labelObj);
+      }
+
+      labelObj.titleText.text = displayName;
+      labelObj.titleText.position.set(t.x, t.y - 38);
+
+      labelObj.ptsText.text = pointText;
+      labelObj.ptsText.position.set(t.x, t.y + 28);
+
+      if (ownerName) {
+        labelObj.bannerText.text = `👑 ${ownerName}`;
+        labelObj.bannerText.position.set(t.x, t.y - 54);
+        labelObj.bannerText.visible = true;
+      } else {
+        labelObj.bannerText.visible = false;
+      }
+    });
+
+    for (const [id, labelObj] of this.cityLabelsMap.entries()) {
+      if (!currentIds.has(id)) {
+        if (this.cityLabelsContainer) {
+          this.cityLabelsContainer.removeChild(labelObj.titleText);
+          this.cityLabelsContainer.removeChild(labelObj.ptsText);
+          this.cityLabelsContainer.removeChild(labelObj.bannerText);
+        }
+        this.cityLabelsMap.delete(id);
+      }
+    }
   }
 
   renderEntities(renderer, g, gameState, entities, myPlayerId) {
-    // Players roam or represent banners
-    const s = gameState.modeState || {};
-    const territories = s.territories || [];
-    const territoryMap = new Map(territories.map(t => [t.id, t]));
-
-    // Draw banners over territories with player avatars
-    territories.forEach(t => {
-      if (t.ownerId) {
-        const player = (gameState.players || []).find(p => p.id === t.ownerId);
-        if (player) {
-          // Floating crown/banner above conquered city
-          const bannerY = t.y - 48 + Math.sin(this.animTime * 2 + t.x) * 3;
-          g.lineStyle(2, 0xd4af37, 0.9);
-          g.beginFill(0x1e293b, 0.9);
-          g.drawRoundedRect(t.x - 45, bannerY - 12, 90, 22, 6);
-          g.endFill();
-        }
-      }
-    });
+    // Mode specific entity highlights
   }
 
   updateHUD(ui, gameState, myPlayerId) {
@@ -274,45 +433,54 @@ export class ConquestClientMode extends BaseClientMode {
     const myScore = myPlayer ? (myPlayer.score || 0) : 0;
 
     // Update Conquest HUD Elements
-    if (ui.conquestRoundCount) ui.conquestRoundCount.textContent = `${s.currentRound || 1} / ${s.maxRounds || 5}`;
+    if (ui.conquestRoundCount) ui.conquestRoundCount.textContent = `${s.currentRound || 1} / ${s.maxRounds || 6}`;
     if (ui.conquestMyScore) ui.conquestMyScore.textContent = `${myScore} Puan`;
     if (ui.conquestTerritoryCount) ui.conquestTerritoryCount.textContent = `${myTerritoryCount} Şehir`;
 
+    const phase = s.phase || s.gameState || 'waiting';
+    const timerVal = s.timer !== undefined ? s.timer : (s.phaseTimer !== undefined ? s.phaseTimer : 0);
+    const pickerId = s.pickingPlayerId || s.activePickerId;
+
     // Phase Badge & Announcements
     if (ui.conquestPhaseBadge) {
-      if (s.phase === 'waiting') {
-        ui.conquestPhaseBadge.textContent = '🏰 LOBİ - Oyuncular Bekleniyor';
+      if (phase === 'waiting') {
+        ui.conquestPhaseBadge.textContent = '🏰 LOBİ - Seferi Başlatın';
         ui.conquestPhaseBadge.className = 'conquest-phase-pill phase-lobby';
-      } else if (s.phase === 'question') {
-        ui.conquestPhaseBadge.textContent = `❓ SORU #${s.currentRound || 1} (${s.timer || 0}s)`;
+      } else if (phase === 'question') {
+        ui.conquestPhaseBadge.textContent = `❓ SORU #${s.currentRound || 1} (${timerVal}s)`;
         ui.conquestPhaseBadge.className = 'conquest-phase-pill phase-question';
-      } else if (s.phase === 'question_result') {
+      } else if (phase === 'question_result') {
         ui.conquestPhaseBadge.textContent = '📊 CEVAP DEĞERLENDİRMESİ';
         ui.conquestPhaseBadge.className = 'conquest-phase-pill phase-result';
-      } else if (s.phase === 'conquer_pick') {
-        const picker = (gameState.players || []).find(p => p.id === s.pickingPlayerId);
-        const pickerName = picker ? picker.username : 'Bir oyuncu';
-        if (s.pickingPlayerId === myPlayerId) {
+      } else if (phase === 'conquer_pick') {
+        const picker = (gameState.players || []).find(p => p.id === pickerId);
+        const pickerName = picker ? picker.name : 'Bir oyuncu';
+        if (pickerId === myPlayerId) {
           ui.conquestPhaseBadge.textContent = '⚔️ SENİN SIRAN! BİR ŞEHİR SEÇ!';
           ui.conquestPhaseBadge.className = 'conquest-phase-pill phase-mypick';
         } else {
           ui.conquestPhaseBadge.textContent = `⚔️ ${pickerName} Şehir Seçiyor...`;
           ui.conquestPhaseBadge.className = 'conquest-phase-pill phase-pick';
         }
-      } else if (s.phase === 'game_over') {
+      } else if (phase === 'game_over') {
         ui.conquestPhaseBadge.textContent = '👑 OYUN BİTTİ - ZAFER!';
         ui.conquestPhaseBadge.className = 'conquest-phase-pill phase-gameover';
       }
     }
 
     // Modal Control: Question Modal
-    if (s.phase === 'question' && s.currentQuestion) {
+    if (phase === 'question' && s.currentQuestion) {
       if (ui.modalConquestQuestion && ui.modalConquestQuestion.classList.contains('hidden')) {
-        ui.openConquestQuestionModal(s.currentQuestion, s.timer || 15);
+        ui.openConquestQuestionModal(s.currentQuestion, timerVal || 16, (answer) => {
+          const socketObj = this.socketRef || window.gameApp?.socket;
+          if (socketObj) {
+            socketObj.sendAction({ type: 'conquest_submit_answer', answer });
+          }
+        });
       }
       if (ui.conquestQuestionTimer) {
-        ui.conquestQuestionTimer.textContent = `${s.timer || 0}s`;
-        const progress = Math.max(0, Math.min(100, ((s.timer || 0) / 15) * 100));
+        ui.conquestQuestionTimer.textContent = `${timerVal}s`;
+        const progress = Math.max(0, Math.min(100, (timerVal / 16) * 100));
         if (ui.conquestTimerBar) ui.conquestTimerBar.style.width = `${progress}%`;
       }
     } else {
@@ -322,7 +490,7 @@ export class ConquestClientMode extends BaseClientMode {
     }
 
     // Modal Control: Question Result Podium Modal
-    if (s.phase === 'question_result' && s.lastResult) {
+    if (phase === 'question_result' && s.lastResult) {
       if (ui.modalConquestResult && ui.modalConquestResult.classList.contains('hidden')) {
         ui.openConquestResultModal(s.lastResult, gameState.players || []);
       }
@@ -333,14 +501,14 @@ export class ConquestClientMode extends BaseClientMode {
     }
 
     // Help / Action Hint Bar
-    if (s.phase === 'waiting') {
+    if (phase === 'waiting') {
       if (ui.hintAction) ui.hintAction.innerHTML = '🏰 <b>Bil ve Fethet:</b> Soruları en yakın ve hızlı cevaplayan şehir fetheder!';
       if (ui.hintHold) ui.hintHold.innerHTML = '👑 <b>Host:</b> Oyunu başlatabilir.';
-    } else if (s.phase === 'question') {
+    } else if (phase === 'question') {
       if (ui.hintAction) ui.hintAction.innerHTML = '⚡ <b>Soru Zamanı:</b> Klavyeden veya ekrandaki tuş takımından cevabını gir!';
       if (ui.hintHold) ui.hintHold.innerHTML = '🎯 Hedef: Doğru cevaba en yakın ve en hızlı olmak.';
-    } else if (s.phase === 'conquer_pick') {
-      if (s.pickingPlayerId === myPlayerId) {
+    } else if (phase === 'conquer_pick') {
+      if (pickerId === myPlayerId) {
         if (ui.hintAction) ui.hintAction.innerHTML = '⚔️ <b>Fetih Sırası Sende:</b> Haritadan ele geçirmek istediğin şehre tıkla!';
       } else {
         if (ui.hintAction) ui.hintAction.innerHTML = '⏳ <b>Bekleniyor:</b> Kazanan oyuncu haritadan şehir seçiyor...';
@@ -348,3 +516,4 @@ export class ConquestClientMode extends BaseClientMode {
     }
   }
 }
+

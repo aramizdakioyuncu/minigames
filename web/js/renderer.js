@@ -119,6 +119,33 @@ export class GameRenderer {
     }
   }
 
+  // Coordinate Transformations
+  screenToWorld(screenX, screenY) {
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+    const zoom = this.camera.zoom || 1.0;
+    const camX = this.camera.x || 0;
+    const camY = this.camera.y || 0;
+
+    return {
+      x: (screenX - cx) / zoom + camX,
+      y: (screenY - cy) / zoom + camY
+    };
+  }
+
+  worldToScreen(worldX, worldY) {
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+    const zoom = this.camera.zoom || 1.0;
+    const camX = this.camera.x || 0;
+    const camY = this.camera.y || 0;
+
+    return {
+      x: (worldX - camX) * zoom + cx,
+      y: (worldY - camY) * zoom + cy
+    };
+  }
+
   // Frame-Rate Independent Camera Tracking
   updateCamera(targetX, targetY, dt = 0.016, isFixedArena = false, arenaW = 1200, arenaH = 650) {
     if (isFixedArena) {
