@@ -5,6 +5,7 @@ import { SumoClientMode } from './sumoClient.js';
 import { AgarClientMode } from './agarClient.js';
 import { SpaceClientMode } from './spaceClient.js';
 import { VampireClientMode } from './vampireClient.js';
+import { ConquestClientMode } from './conquestClient.js';
 
 class ClientModeRegistry {
   constructor() {
@@ -19,6 +20,7 @@ class ClientModeRegistry {
     this.register('agar', new AgarClientMode());
     this.register('space', new SpaceClientMode());
     this.register('vampire', new VampireClientMode());
+    this.register('conquest', new ConquestClientMode());
   }
 
   register(modeType, modeInstance) {

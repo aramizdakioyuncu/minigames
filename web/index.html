@@ -189,6 +189,11 @@
               <span class="mode-radio-icon">🧛</span>
               <span class="mode-radio-title">Vampir Köylü</span>
             </label>
+            <label class="mode-radio-card">
+              <input type="radio" name="create-room-mode" value="conquest">
+              <span class="mode-radio-icon">🏰</span>
+              <span class="mode-radio-title">Bil ve Fethet</span>
+            </label>
           </div>
         </div>
 
@@ -324,6 +329,24 @@
             👥 Yaşayan: <b id="vampire-alive-count">0</b>
           </div>
           <div class="vampire-role-pill" id="vampire-role-badge">🧑‍🌾 KÖYLÜ</div>
+        </div>
+      </div>
+
+      <!-- HUD: Bil ve Fethet (Conquest) Status -->
+      <div class="hud-conquest glass-card hidden" id="hud-conquest">
+        <div class="conquest-hud-left">
+          <div class="conquest-phase-pill" id="conquest-phase-badge">🏰 LOBİ - Oyuncular Bekleniyor</div>
+          <div class="conquest-round-badge">
+            🏆 Tur: <b id="conquest-round-count">1 / 5</b>
+          </div>
+        </div>
+        <div class="conquest-hud-right">
+          <div class="conquest-score-badge">
+            ⭐ <b id="conquest-my-score">0 Puan</b>
+          </div>
+          <div class="conquest-territory-badge">
+            🏰 <b id="conquest-territory-count">0 Şehir</b>
+          </div>
         </div>
       </div>
 
@@ -606,6 +629,63 @@
           <h3>KEHANET SONUCU</h3>
           <div class="seer-result-content" id="seer-result-content"></div>
           <button class="btn btn-primary" id="btn-close-seer-result">Kapat</button>
+        </div>
+      </div>
+
+      <!-- 12. CONQUEST TRIVIA QUESTION MODAL -->
+      <div id="modal-conquest-question" class="modal-overlay hidden">
+        <div class="glass-card conquest-question-card">
+          <div class="conquest-q-header">
+            <span class="conquest-category-badge" id="conquest-cat-badge">📚 TARİH</span>
+            <div class="conquest-timer-box">
+              ⏱️ <span id="conquest-question-timer">15s</span>
+            </div>
+          </div>
+          <div class="conquest-timer-track">
+            <div class="conquest-timer-fill" id="conquest-timer-bar" style="width: 100%;"></div>
+          </div>
+          <div class="conquest-q-body">
+            <h3 class="conquest-question-text" id="conquest-question-text">Soru yükleniyor...</h3>
+            <div class="conquest-unit-hint" id="conquest-unit-hint">Cevap birimi: Yıl</div>
+            <div class="conquest-input-wrap">
+              <input type="number" id="conquest-answer-input" placeholder="Cevabınızı girin..." autocomplete="off">
+            </div>
+            <!-- On-screen Numeric Keypad -->
+            <div class="conquest-keypad">
+              <button class="btn-num" data-num="1">1</button>
+              <button class="btn-num" data-num="2">2</button>
+              <button class="btn-num" data-num="3">3</button>
+              <button class="btn-num" data-num="4">4</button>
+              <button class="btn-num" data-num="5">5</button>
+              <button class="btn-num" data-num="6">6</button>
+              <button class="btn-num" data-num="7">7</button>
+              <button class="btn-num" data-num="8">8</button>
+              <button class="btn-num" data-num="9">9</button>
+              <button class="btn-num btn-num-clear" id="btn-conquest-clear">C</button>
+              <button class="btn-num" data-num="0">0</button>
+              <button class="btn-num btn-num-backspace" id="btn-conquest-backspace">⌫</button>
+            </div>
+            <button class="btn btn-primary btn-block conquest-submit-btn" id="btn-conquest-submit-answer">
+              ⚔️ Cevabı Onayla (Enter)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 13. CONQUEST QUESTION RESULT MODAL -->
+      <div id="modal-conquest-result" class="modal-overlay hidden">
+        <div class="glass-card conquest-result-card">
+          <div class="conquest-res-header">
+            <div class="conquest-res-icon">🎯</div>
+            <h2>SORU DEĞERLENDİRMESİ</h2>
+            <div class="conquest-correct-answer-box">
+              <span>DOĞRU CEVAP:</span>
+              <b id="conquest-correct-answer-val">1453</b>
+            </div>
+          </div>
+          <div class="conquest-podium-list" id="conquest-podium-list">
+            <!-- Dynamic player answers ranking -->
+          </div>
         </div>
       </div>
 

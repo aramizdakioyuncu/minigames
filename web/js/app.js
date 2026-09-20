@@ -144,7 +144,7 @@ class GameApp {
     // Mode Radio Selection
     const modeCards = document.querySelectorAll('.mode-radio-card');
     modeCards.forEach(card => {
-      card.addEventListener('click', () => {
+      card.addEventListener('click', (e) => {
         modeCards.forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
         const input = card.querySelector('input');
@@ -155,7 +155,7 @@ class GameApp {
     // Speed Radio Selection
     const speedCards = document.querySelectorAll('.speed-radio-card');
     speedCards.forEach(card => {
-      card.addEventListener('click', () => {
+      card.addEventListener('click', (e) => {
         speedCards.forEach(c => c.classList.remove('selected'));
         card.classList.add('selected');
         const input = card.querySelector('input');
@@ -183,7 +183,6 @@ class GameApp {
       });
 
       this.ui.modalCreateRoom.classList.add('hidden');
-      setTimeout(() => this.socket.send({ type: 'get_rooms' }), 200);
     });
 
     // Mobile Touch Hold Button
@@ -462,6 +461,10 @@ class GameApp {
       this.ui.renderRooms(rooms, (roomId) => this.joinRoom(roomId));
     });
 
+    this.socket.on('onRoomCreated', (roomId) => {
+      this.joinRoom(roomId);
+    });
+
     this.socket.on('onJoinedRoom', (roomData) => {
       this.currentRoom = roomData;
       this.myCurrentRole = null;
@@ -486,6 +489,10 @@ class GameApp {
       window.focus();
       if (roomData && roomData.mode) {
         this.ui.prepareGameHUD(roomData.mode, roomData);
+        const activeMode = clientModeRegistry.getActiveMode(roomData.mode);
+        if (activeMode && activeMode.setContext) {
+          activeMode.setContext(this.renderer, this.socket, this.socket.myPlayerId);
+        }
       }
       this.ui.showView('view-game');
       this.ui.chatMessages.innerHTML = '';
@@ -637,8 +644,34 @@ class GameApp {
               ? '🚨 Casuslar Kazandı!'
               : (evt.winner === 'vampires'
                 ? '🩸 Vampirler Kazandı!'
-                : (evt.winner === 'villagers' ? '🏰 Köylüler Kazandı!' : '✨ Mürettebat Kazandı!'));
+                : (evt.winner === 'villagers'
+                  ? '🏰 Köylüler Kazandı!'
+                  : (evt.winnerName
+                    ? `👑 ${evt.winnerName} Haritayı Fethetti!`
+                    : '✨ Oyun Bitti!')));
             this.ui.showGoalBanner('🏆 OYUN BİTTİ!', winTitle);
+          } else if (evt.type === 'conquest_question') {
+            audio.playConquestHorn();
+            this.ui.openConquestQuestionModal(evt, evt.timer || 15, (answer) => {
+              this.socket.sendAction({ type: 'conquest_submit_answer', answer });
+            });
+          } else if (evt.type === 'conquest_question_result') {
+            audio.playCorrectChime();
+            this.ui.openConquestResultModal(evt, state.players || []);
+          } else if (evt.type === 'conquest_pick_turn') {
+            if (evt.pickingPlayerId === this.socket.myPlayerId) {
+              audio.playConquestHorn();
+              this.ui.showGoalBanner('⚔️ SENİN SIRAN!', 'Haritadan fethetmek istediğin şehre tıkla!');
+            }
+          } else if (evt.type === 'conquest_territory_claimed') {
+            audio.playSwordClash();
+            this.ui.showGoalBanner('🏰 ŞEHİR FETHEDİLDİ!', `${evt.ownerName}, ${evt.territoryName} şehrini fethetti (+${evt.points}P)!`);
+          } else if (evt.type === 'sfx_war_horn') {
+            audio.playConquestHorn();
+          } else if (evt.type === 'sfx_correct_chime') {
+            audio.playCorrectChime();
+          } else if (evt.type === 'sfx_sword_clash') {
+            audio.playSwordClash();
           } else if (evt.type === 'vampire_match_started') {
             audio.playVillageBell();
             this.ui.showGoalBanner('🧛 VAMPİR KÖYLÜ BAŞLADI!', 'Rolünüz belirleniyor...');

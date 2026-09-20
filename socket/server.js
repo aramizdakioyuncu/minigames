@@ -1,6 +1,7 @@
 import { WebSocketServer } from 'ws';
 import { Room } from './engine/room.js';
 import { configDb } from './db/configDb.js';
+import { modeRegistry } from './engine/modes/modeRegistry.js';
 
 const PORT = process.env.PORT || 5050;
 const wss = new WebSocketServer({ port: PORT });
@@ -13,6 +14,8 @@ function initDefaultRooms() {
   const defaultRooms = [
     { id: 'puck-1', name: '⚽ Disk Futbolu Türkiye Sunucusu', mode: 'puck', max: 8, speed: 1.0 },
     { id: 'space-1', name: '🚀 Uzay Casusu / Skeld Gemisi', mode: 'space', max: 10, speed: 1.0 },
+    { id: 'vampire-1', name: '🧛 Vampir Köylü / Kasaba Meydanı', mode: 'vampire', max: 12, speed: 1.0 },
+    { id: 'conquest-1', name: '🏰 Bil ve Fethet / Anadolu Seferi', mode: 'conquest', max: 8, speed: 1.0 },
     { id: 'puck-2', name: '⚡ Disk Futbolu 1v1 Hızlı Düello', mode: 'puck', max: 2, speed: 1.15 },
     { id: 'sumo-1', name: '🥊 Sumo Knockout Arenası', mode: 'sumo', max: 10, speed: 1.0 },
     { id: 'agar-1', name: '🟢 Agar Büyüme Arenası', mode: 'agar', max: 20, speed: 1.0 }
@@ -39,9 +42,9 @@ wss.on('connection', (ws) => {
     rooms: getPublicRoomsList()
   });
 
-  ws.on('message', (raw) => {
+  ws.on('message', (message) => {
     try {
-      const data = JSON.parse(raw.toString());
+      const data = JSON.parse(message);
 
       switch (data.type) {
         case 'get_rooms': {
@@ -54,8 +57,9 @@ wss.on('connection', (ws) => {
 
         case 'create_room': {
           const roomId = 'rm_' + Math.random().toString(36).substring(2, 8);
-          const roomName = (data.name || 'Özel Oda').substring(0, 24);
-          const mode = ['puck', 'sumo', 'agar', 'space'].includes(data.mode) ? data.mode : 'puck';
+          const roomName = (data.roomName || data.name || 'Özel Oda').substring(0, 24);
+          const availableModes = modeRegistry.getAvailableModes();
+          const mode = availableModes.includes(data.mode) ? data.mode : 'puck';
           const maxPlayers = Math.min(Math.max(parseInt(data.maxPlayers) || 8, 2), 24);
           const speedMultiplier = Math.min(Math.max(parseFloat(data.speedMultiplier) || 1.35, 0.8), 2.5);
           const matchDuration = Math.min(Math.max(parseInt(data.matchDuration) || 180, 60), 1200);
@@ -72,6 +76,17 @@ wss.on('connection', (ws) => {
           send(ws, {
             type: 'room_created',
             roomId
+          });
+
+          // Broadcast updated rooms list to all lobby clients
+          const pubRooms = getPublicRoomsList();
+          wss.clients.forEach(client => {
+            if (client.readyState === 1) {
+              send(client, {
+                type: 'rooms_list',
+                rooms: pubRooms
+              });
+            }
           });
           break;
         }

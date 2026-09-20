@@ -182,6 +182,31 @@ export class UIController {
       });
     }
 
+    // Conquest (Bil ve Fethet) HUD & Modals
+    this.hudConquest = document.getElementById('hud-conquest');
+    this.conquestPhaseBadge = document.getElementById('conquest-phase-badge');
+    this.conquestRoundCount = document.getElementById('conquest-round-count');
+    this.conquestMyScore = document.getElementById('conquest-my-score');
+    this.conquestTerritoryCount = document.getElementById('conquest-territory-count');
+
+    this.modalConquestQuestion = document.getElementById('modal-conquest-question');
+    this.conquestCatBadge = document.getElementById('conquest-cat-badge');
+    this.conquestQuestionTimer = document.getElementById('conquest-question-timer');
+    this.conquestTimerBar = document.getElementById('conquest-timer-bar');
+    this.conquestQuestionText = document.getElementById('conquest-question-text');
+    this.conquestUnitHint = document.getElementById('conquest-unit-hint');
+    this.conquestAnswerInput = document.getElementById('conquest-answer-input');
+    this.btnConquestClear = document.getElementById('btn-conquest-clear');
+    this.btnConquestBackspace = document.getElementById('btn-conquest-backspace');
+    this.btnConquestSubmitAnswer = document.getElementById('btn-conquest-submit-answer');
+
+    this.modalConquestResult = document.getElementById('modal-conquest-result');
+    this.conquestCorrectAnswerVal = document.getElementById('conquest-correct-answer-val');
+    this.conquestPodiumList = document.getElementById('conquest-podium-list');
+
+    this.onConquestSubmitAnswer = null;
+    this.bindConquestKeypad();
+
     // Goal Announcement
     this.goalAnnouncement = document.getElementById('goal-announcement');
     this.goalText = document.getElementById('goal-text');
@@ -1036,6 +1061,136 @@ export class UIController {
       : `✨ <b>${this.escapeHtml(targetName)}</b> bir <b>MASUM</b> (Vampir Değil).`;
 
     this.modalVampireSeerResult.classList.remove('hidden');
+  }
+
+  bindConquestKeypad() {
+    const numButtons = document.querySelectorAll('.conquest-keypad .btn-num[data-num]');
+    numButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const num = btn.getAttribute('data-num');
+        if (this.conquestAnswerInput) {
+          this.conquestAnswerInput.value = (this.conquestAnswerInput.value || '') + num;
+          this.conquestAnswerInput.focus();
+        }
+      });
+    });
+
+    if (this.btnConquestClear) {
+      this.btnConquestClear.addEventListener('click', () => {
+        if (this.conquestAnswerInput) {
+          this.conquestAnswerInput.value = '';
+          this.conquestAnswerInput.focus();
+        }
+      });
+    }
+
+    if (this.btnConquestBackspace) {
+      this.btnConquestBackspace.addEventListener('click', () => {
+        if (this.conquestAnswerInput) {
+          const val = this.conquestAnswerInput.value || '';
+          this.conquestAnswerInput.value = val.slice(0, -1);
+          this.conquestAnswerInput.focus();
+        }
+      });
+    }
+
+    const submitAction = () => {
+      if (!this.conquestAnswerInput) return;
+      const rawVal = this.conquestAnswerInput.value.trim();
+      if (rawVal === '') return;
+      const parsed = parseFloat(rawVal);
+      if (isNaN(parsed)) return;
+
+      if (this.btnConquestSubmitAnswer) {
+        this.btnConquestSubmitAnswer.disabled = true;
+        this.btnConquestSubmitAnswer.textContent = '✅ Cevap Gönderildi';
+      }
+
+      if (this.onConquestSubmitAnswer) {
+        this.onConquestSubmitAnswer(parsed);
+      }
+    };
+
+    if (this.btnConquestSubmitAnswer) {
+      this.btnConquestSubmitAnswer.addEventListener('click', submitAction);
+    }
+
+    if (this.conquestAnswerInput) {
+      this.conquestAnswerInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitAction();
+        }
+      });
+    }
+  }
+
+  openConquestQuestionModal(questionData, timerSec, onSubmit) {
+    if (!this.modalConquestQuestion) return;
+    this.onConquestSubmitAnswer = onSubmit || this.onConquestSubmitAnswer;
+
+    if (this.conquestCatBadge) {
+      this.conquestCatBadge.textContent = `📚 ${questionData.category || 'GENEL KÜLTÜR'}`;
+    }
+    if (this.conquestQuestionText) {
+      this.conquestQuestionText.textContent = questionData.question || '...';
+    }
+    if (this.conquestUnitHint) {
+      this.conquestUnitHint.textContent = `Cevap Birimi: ${questionData.unit || 'Sayı'}`;
+    }
+    if (this.conquestAnswerInput) {
+      this.conquestAnswerInput.value = '';
+      this.conquestAnswerInput.disabled = false;
+      setTimeout(() => this.conquestAnswerInput.focus(), 100);
+    }
+    if (this.btnConquestSubmitAnswer) {
+      this.btnConquestSubmitAnswer.disabled = false;
+      this.btnConquestSubmitAnswer.textContent = '⚔️ Cevabı Onayla (Enter)';
+    }
+    if (this.conquestQuestionTimer) {
+      this.conquestQuestionTimer.textContent = `${timerSec}s`;
+    }
+
+    this.modalConquestQuestion.classList.remove('hidden');
+  }
+
+  openConquestResultModal(resultData, players) {
+    if (!this.modalConquestResult) return;
+    if (this.modalConquestQuestion) this.modalConquestQuestion.classList.add('hidden');
+
+    if (this.conquestCorrectAnswerVal) {
+      this.conquestCorrectAnswerVal.textContent = `${resultData.correctAnswer} ${resultData.unit || ''}`;
+    }
+
+    if (this.conquestPodiumList) {
+      this.conquestPodiumList.innerHTML = '';
+      const rankings = resultData.rankings || [];
+
+      rankings.forEach((entry, idx) => {
+        const item = document.createElement('div');
+        item.className = `conquest-podium-item ${idx === 0 ? 'winner' : ''}`;
+
+        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`;
+        const isExact = entry.diff === 0;
+        const diffText = entry.answer === null
+          ? 'Cevap verilmedi'
+          : isExact
+            ? '🎯 Tam İsabet! (Fark: 0)'
+            : `Fark: ${entry.diff} (${entry.timeTaken.toFixed(1)}s)`;
+
+        item.innerHTML = `
+          <div class="podium-rank-badge">${medal}</div>
+          <div class="podium-player-name">${this.escapeHtml(entry.username || 'Oyuncu')}</div>
+          <div class="podium-stats">
+            <span class="podium-guess">${entry.answer !== null ? entry.answer : '-'}</span>
+            <span class="podium-diff ${isExact ? 'exact' : ''}">${diffText}</span>
+          </div>
+        `;
+        this.conquestPodiumList.appendChild(item);
+      });
+    }
+
+    this.modalConquestResult.classList.remove('hidden');
   }
 
   escapeHtml(str) {

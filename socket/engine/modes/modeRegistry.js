@@ -5,6 +5,7 @@ import { SumoMode } from './sumoMode.js';
 import { AgarMode } from './agarMode.js';
 import { SpaceMode } from './spaceMode.js';
 import { VampireMode } from './vampireMode.js';
+import { ConquestMode } from './conquestMode.js';
 
 class ModeRegistry {
   constructor() {
@@ -18,6 +19,7 @@ class ModeRegistry {
     this.register('agar', AgarMode);
     this.register('space', SpaceMode);
     this.register('vampire', VampireMode);
+    this.register('conquest', ConquestMode);
   }
 
   /**

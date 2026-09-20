@@ -2620,3 +2620,371 @@ input[type="text"]:focus, .select-styled:focus {
   color: #6ee7b7;
 }
 
+/* ==========================================================================
+   BIL VE FETHET (CONQUEST TRIVIA) STYLES
+   ========================================================================== */
+
+/* 1. HUD: Conquest Bar */
+.hud-conquest {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 8px 24px;
+  border-radius: var(--radius-full);
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(212, 175, 55, 0.2);
+  z-index: 20;
+  backdrop-filter: blur(12px);
+}
+
+.conquest-hud-left,
+.conquest-hud-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.conquest-phase-pill {
+  font-size: 13px;
+  font-weight: 800;
+  padding: 5px 14px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.conquest-phase-pill.phase-lobby {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid #475569;
+}
+
+.conquest-phase-pill.phase-question {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  animation: pulse-border 1.5s infinite;
+}
+
+.conquest-phase-pill.phase-result {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid #a855f7;
+}
+
+.conquest-phase-pill.phase-mypick {
+  background: rgba(234, 179, 8, 0.25);
+  color: #facc15;
+  border: 1px solid #eab308;
+  box-shadow: 0 0 15px rgba(234, 179, 8, 0.6);
+  animation: conquerPulse 1s infinite alternate;
+}
+
+.conquest-phase-pill.phase-pick {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+  border: 1px solid #f97316;
+}
+
+.conquest-phase-pill.phase-gameover {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid #22c55e;
+}
+
+@keyframes conquerPulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  100% { transform: scale(1.04); filter: brightness(1.2); }
+}
+
+.conquest-round-badge,
+.conquest-score-badge,
+.conquest-territory-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.conquest-score-badge b {
+  color: #facc15;
+}
+
+.conquest-territory-badge b {
+  color: #60a5fa;
+}
+
+/* 2. Modals: Trivia Question Modal */
+.conquest-question-card {
+  width: 90%;
+  max-width: 520px;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(20px);
+  border: 2px solid rgba(212, 175, 55, 0.6);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.95), 0 0 40px rgba(212, 175, 55, 0.25);
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.conquest-q-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.conquest-category-badge {
+  background: rgba(212, 175, 55, 0.15);
+  border: 1px solid #d4af37;
+  color: #facc15;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.conquest-timer-box {
+  font-weight: 900;
+  font-size: 16px;
+  color: #ef4444;
+}
+
+.conquest-timer-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.conquest-timer-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+  transition: width 1s linear;
+}
+
+.conquest-question-text {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: #ffffff;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.conquest-unit-hint {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 16px;
+}
+
+.conquest-input-wrap {
+  margin-bottom: 16px;
+}
+
+.conquest-input-wrap input {
+  width: 100%;
+  padding: 14px;
+  font-size: 26px;
+  font-weight: 900;
+  text-align: center;
+  color: #facc15;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  border-radius: var(--radius-md);
+  outline: none;
+  letter-spacing: 2px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.conquest-input-wrap input:focus {
+  border-color: #facc15;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 15px rgba(250, 204, 21, 0.4);
+}
+
+/* Numeric Keypad */
+.conquest-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.btn-num {
+  padding: 12px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-num:hover {
+  background: rgba(212, 175, 55, 0.2);
+  border-color: #d4af37;
+  transform: translateY(-2px);
+}
+
+.btn-num:active {
+  transform: translateY(1px);
+}
+
+.btn-num-clear {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.btn-num-backspace {
+  color: #fb923c;
+  background: rgba(249, 115, 22, 0.15);
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+.conquest-submit-btn {
+  font-size: 16px;
+  font-weight: 800;
+  padding: 14px;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  border: 1px solid #f59e0b;
+  box-shadow: 0 4px 15px rgba(217, 119, 6, 0.4);
+}
+
+.conquest-submit-btn:hover {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.6);
+  transform: translateY(-2px);
+}
+
+/* 3. Modals: Question Result Modal */
+.conquest-result-card {
+  width: 90%;
+  max-width: 540px;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.98);
+  backdrop-filter: blur(24px);
+  border: 2px solid rgba(212, 175, 55, 0.7);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 25px 75px rgba(0, 0, 0, 0.95), 0 0 50px rgba(212, 175, 55, 0.35);
+  text-align: center;
+  animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.conquest-res-header {
+  margin-bottom: 20px;
+}
+
+.conquest-res-icon {
+  font-size: 40px;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 0 10px #facc15);
+}
+
+.conquest-res-header h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffffff;
+  margin-bottom: 12px;
+}
+
+.conquest-correct-answer-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid #22c55e;
+  padding: 8px 20px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  color: #86efac;
+}
+
+.conquest-correct-answer-box b {
+  font-size: 20px;
+  color: #ffffff;
+}
+
+.conquest-podium-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.conquest-podium-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.conquest-podium-item.winner {
+  background: rgba(234, 179, 8, 0.2);
+  border-color: #facc15;
+  box-shadow: 0 0 15px rgba(250, 204, 21, 0.3);
+}
+
+.podium-rank-badge {
+  font-weight: 900;
+  font-size: 16px;
+  width: 28px;
+  text-align: center;
+}
+
+.podium-player-name {
+  flex: 1;
+  text-align: left;
+  margin-left: 10px;
+  font-weight: 800;
+  font-size: 15px;
+  color: #ffffff;
+}
+
+.podium-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.podium-guess {
+  font-weight: 800;
+  font-size: 14px;
+  color: #facc15;
+}
+
+.podium-diff {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.podium-diff.exact {
+  color: #4ade80;
+  font-weight: 800;
+}
+
+

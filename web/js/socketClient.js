@@ -94,6 +94,10 @@ export class SocketClient {
         if (this.handlers.onRoomsList) this.handlers.onRoomsList(data.rooms);
         break;
 
+      case 'room_created':
+        if (this.handlers.onRoomCreated) this.handlers.onRoomCreated(data.roomId);
+        break;
+
       case 'joined_room':
         if (this.handlers.onJoinedRoom) this.handlers.onJoinedRoom(data);
         break;
