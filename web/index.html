@@ -101,10 +101,10 @@
 
       <!-- Lobby Content -->
       <main class="lobby-main">
-        <!-- Game Modes Banner -->
-        <div class="modes-carousel">
+        <!-- Game Modes Banner (Dynamic from DB / Backend) -->
+        <div class="modes-carousel" id="modes-carousel">
           <div class="mode-card card-puck">
-            <div class="mode-badge">Futbol</div>
+            <div class="mode-badge">Takım Oyunu</div>
             <h3>⚽ Disk Futbolu</h3>
             <p>2D takım futbolu! Şut çek, topu tut, çalım at, golleri sırala.</p>
           </div>
@@ -113,14 +113,24 @@
             <h3>🚀 Uzay Casusu</h3>
             <p>Görevleri yap, casusu bul veya gizlice mürettebatı avla!</p>
           </div>
+          <div class="mode-card card-vampire">
+            <div class="mode-badge">Sosyal Çıkarım</div>
+            <h3>🧛 Vampir Köylü</h3>
+            <p>Gece kasabaya sis çöker! Doktor korur, kahin araştırır, köylüler asar.</p>
+          </div>
+          <div class="mode-card card-conquest">
+            <div class="mode-badge">Bilgi & Strateji</div>
+            <h3>🏰 Bil ve Fethet</h3>
+            <p>Sayısal tahmin sorularını en yakın ve hızlı bil, haritayı fethet!</p>
+          </div>
           <div class="mode-card card-sumo">
             <div class="mode-badge">Battle Royale</div>
             <h3>🥊 Sumo Knockout</h3>
             <p>Daralan halkada rakiplerini dışarı it!</p>
           </div>
           <div class="mode-card card-agar">
-            <div class="mode-badge">Büyüme</div>
-            <h3>🟢 Agar Bump & Feed</h3>
+            <div class="mode-badge">Büyüme & Kaos</div>
+            <h3>🟢 Agar Büyüme</h3>
             <p>Yemleri yut, kütleni katla ve haritaya hükmet.</p>
           </div>
         </div>
@@ -128,10 +138,12 @@
         <!-- Room Filters & Table -->
         <div class="rooms-container glass-card">
           <div class="rooms-toolbar">
-            <div class="filter-tabs">
+            <div class="filter-tabs" id="filter-tabs">
               <button class="tab-btn active" data-filter="all">Tüm Odalar</button>
               <button class="tab-btn" data-filter="puck">⚽ Disk Futbolu</button>
               <button class="tab-btn" data-filter="space">🚀 Uzay Casusu</button>
+              <button class="tab-btn" data-filter="vampire">🧛 Vampir Köylü</button>
+              <button class="tab-btn" data-filter="conquest">🏰 Bil ve Fethet</button>
               <button class="tab-btn" data-filter="sumo">🥊 Sumo</button>
               <button class="tab-btn" data-filter="agar">🟢 Agar</button>
             </div>
@@ -309,7 +321,10 @@
               <div class="task-bar-fill" id="task-progress-fill" style="width: 0%;"></div>
             </div>
           </div>
-          <div class="space-role-pill" id="space-role-badge">🛠️ MÜRETTEBAT</div>
+          <div class="space-hud-actions">
+            <div class="space-role-pill" id="space-role-badge">🛠️ MÜRETTEBAT</div>
+            <button class="btn btn-sm btn-secondary space-map-btn" id="btn-space-minimap" title="Harita (M)">🗺️ Harita (M)</button>
+          </div>
         </div>
       </div>
 
@@ -467,7 +482,30 @@
         </div>
       </div>
 
-      <!-- 7. INTERACTIVE TASK MODAL -->
+      <!-- 7. HOLOGRAPHIC SPACESHIP MINIMAP MODAL -->
+      <div id="modal-space-minimap" class="modal-overlay hidden">
+        <div class="glass-card space-minimap-card">
+          <div class="space-minimap-header">
+            <div class="space-minimap-title">
+              <span class="minimap-icon">🗺️</span>
+              <h3>UZAY GEMİSİ TAKTİK HARİTASI & GÖREVLER</h3>
+            </div>
+            <button class="btn-close" id="btn-close-space-minimap">✕</button>
+          </div>
+          <div class="space-minimap-canvas-wrap">
+            <canvas id="space-minimap-canvas" width="840" height="540"></canvas>
+          </div>
+          <div class="space-minimap-footer">
+            <div class="minimap-legend-item"><span class="legend-dot dot-player"></span> <b>Sen</b> (Mevcut Konum)</div>
+            <div class="minimap-legend-item"><span class="legend-dot dot-task"></span> <b>!</b> Bekleyen Görevler</div>
+            <div class="minimap-legend-item"><span class="legend-dot dot-door"></span> <b>🚪</b> Otomatik Kapılar</div>
+            <div class="minimap-legend-item"><span class="legend-dot dot-vent"></span> <b>🌀</b> Havalandırmalar</div>
+            <span class="minimap-hint-key">Kapatmak için <b>M</b> veya <b>ESC</b></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 8. INTERACTIVE TASK MODAL -->
       <div id="modal-task-interactive" class="modal-overlay hidden">
         <div class="glass-card task-mini-card">
           <div class="task-mini-header">

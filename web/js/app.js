@@ -30,11 +30,26 @@ class GameApp {
     this.init();
   }
 
+  async loadGameModes() {
+    try {
+      const res = await fetch('/api/modes');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.modes && Array.isArray(data.modes)) {
+          this.ui.renderGameModesCarousel(data.modes);
+        }
+      }
+    } catch (e) {
+      // Handled via socket fallback onInit
+    }
+  }
+
   init() {
     this.bindProfileControls();
     this.bindLobbyControls();
     this.bindGameControls();
     this.bindSocketEvents();
+    this.loadGameModes();
 
     // Connect to WebSocket Server
     this.socket.connect().then(() => {
@@ -389,6 +404,25 @@ class GameApp {
       });
     }
 
+    // Space Minimap Toggle Buttons
+    const btnSpaceMinimap = document.getElementById('btn-space-minimap');
+    if (btnSpaceMinimap) {
+      btnSpaceMinimap.addEventListener('click', () => {
+        const spaceMode = clientModeRegistry.getMode('space');
+        if (spaceMode && spaceMode.toggleMinimap) {
+          spaceMode.toggleMinimap(this.ui, this.lastGameState, this.socket.myPlayerId);
+        }
+      });
+    }
+
+    const btnCloseSpaceMinimap = document.getElementById('btn-close-space-minimap');
+    if (btnCloseSpaceMinimap) {
+      btnCloseSpaceMinimap.addEventListener('click', () => {
+        const modal = document.getElementById('modal-space-minimap');
+        if (modal) modal.classList.add('hidden');
+      });
+    }
+
     // Keyboard Hotkeys
     window.addEventListener('keydown', (e) => {
       if (this.ui.modalMeeting && !this.ui.modalMeeting.classList.contains('hidden')) {
@@ -403,6 +437,11 @@ class GameApp {
       }
 
       if (e.key === 'Escape' && this.ui.currentView === 'view-game') {
+        const minimapModal = document.getElementById('modal-space-minimap');
+        if (minimapModal && !minimapModal.classList.contains('hidden')) {
+          minimapModal.classList.add('hidden');
+          return;
+        }
         // If task interactive modal open, close it
         if (this.ui.modalTaskInteractive && !this.ui.modalTaskInteractive.classList.contains('hidden')) {
           this.ui.closeTaskMiniGame();
@@ -411,6 +450,16 @@ class GameApp {
         this.ui.toggleEscMenu();
         this.ui.updateEscMenu(this.lastGameState, this.socket.myPlayerId, this.currentRoom);
         return;
+      }
+
+      if ((e.code === 'KeyM') && !this.input.isChatting && this.ui.currentView === 'view-game') {
+        if (this.lastGameState && this.lastGameState.mode === 'space') {
+          const spaceMode = clientModeRegistry.getMode('space');
+          if (spaceMode && spaceMode.toggleMinimap) {
+            spaceMode.toggleMinimap(this.ui, this.lastGameState, this.socket.myPlayerId);
+          }
+          return;
+        }
       }
 
       if (e.key === 'Enter' && this.ui.currentView === 'view-game') {
@@ -454,6 +503,9 @@ class GameApp {
     this.socket.on('onInit', (data) => {
       if (data.rooms) {
         this.ui.renderRooms(data.rooms, (roomId) => this.joinRoom(roomId));
+      }
+      if (data.modes) {
+        this.ui.renderGameModesCarousel(data.modes);
       }
     });
 

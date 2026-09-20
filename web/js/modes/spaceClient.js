@@ -118,7 +118,58 @@ export class SpaceClientMode extends BaseClientMode {
     g.drawCircle(0, -30, 18);
     g.endFill();
 
-    // 5. Starship Hull & Room Walls
+    // 5. Automatic Sliding Airlock Doors
+    const doors = s.doors || [];
+    doors.forEach(d => {
+      const isH = d.orientation === 'h';
+      const isOpen = d.isOpen;
+      const dw = d.w || (isH ? 180 : 28);
+      const dh = d.h || (isH ? 28 : 160);
+
+      // Outer Frame
+      g.lineStyle(2, isOpen ? 0x10b981 : 0xef4444, 0.85);
+      g.beginFill(0x0f172a, 0.9);
+      g.drawRect(d.x - dw / 2, d.y - dh / 2, dw, dh);
+      g.endFill();
+
+      // Sliding blast panels
+      if (!isOpen) {
+        g.lineStyle(2, 0x64748b, 0.9);
+        g.beginFill(0x334155, 0.95);
+        g.drawRect(d.x - dw / 2 + 2, d.y - dh / 2 + 2, dw - 4, dh - 4);
+        g.endFill();
+
+        // Center seam & Hazard Stripes
+        g.lineStyle(2, 0xfacc15, 0.8);
+        if (isH) {
+          g.moveTo(d.x, d.y - dh / 2 + 2);
+          g.lineTo(d.x, d.y + dh / 2 - 2);
+        } else {
+          g.moveTo(d.x - dw / 2 + 2, d.y);
+          g.lineTo(d.x + dw / 2 - 2, d.y);
+        }
+      } else {
+        // Open sliding state (split panels on sides)
+        g.lineStyle(1, 0x10b981, 0.7);
+        g.beginFill(0x1e293b, 0.7);
+        if (isH) {
+          g.drawRect(d.x - dw / 2, d.y - dh / 2, 24, dh);
+          g.drawRect(d.x + dw / 2 - 24, d.y - dh / 2, 24, dh);
+        } else {
+          g.drawRect(d.x - dw / 2, d.y - dh / 2, dw, 24);
+          g.drawRect(d.x - dw / 2, d.y + dh / 2 - 24, dw, 24);
+        }
+        g.endFill();
+      }
+
+      // Status LED indicator
+      g.lineStyle(0);
+      g.beginFill(isOpen ? 0x22c55e : 0xef4444, 1);
+      g.drawCircle(d.x, d.y, 4);
+      g.endFill();
+    });
+
+    // 6. Starship Hull & Room Walls
     g.lineStyle(7, 0x334155, 1);
     walls.forEach(w => {
       if (w.p1 && w.p2) {
@@ -375,6 +426,144 @@ export class SpaceClientMode extends BaseClientMode {
         });
         break;
       }
+    }
+  }
+
+  toggleMinimap(ui, gameState, myPlayerId) {
+    const modal = document.getElementById('modal-space-minimap');
+    if (!modal) return;
+
+    if (!modal.classList.contains('hidden')) {
+      modal.classList.add('hidden');
+    } else {
+      modal.classList.remove('hidden');
+      this.drawMinimapCanvas(gameState, myPlayerId);
+    }
+  }
+
+  drawMinimapCanvas(gameState, myPlayerId) {
+    const canvas = document.getElementById('space-minimap-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const cw = canvas.width;
+    const ch = canvas.height;
+    ctx.clearRect(0, 0, cw, ch);
+
+    const s = (gameState && gameState.modeState) || {};
+    const mapW = s.width || 2800;
+    const mapH = s.height || 1800;
+
+    // Scale world (-1400..1400, -900..900) to canvas (padding 30px)
+    const pad = 35;
+    const scaleX = (cw - pad * 2) / mapW;
+    const scaleY = (ch - pad * 2) / mapH;
+    const toScreenX = (wx) => cw / 2 + wx * scaleX;
+    const toScreenY = (wy) => ch / 2 + wy * scaleY;
+
+    // 1. Radar Grid Background
+    ctx.fillStyle = '#030712';
+    ctx.fillRect(0, 0, cw, ch);
+
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < cw; x += 40) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ch); ctx.stroke();
+    }
+    for (let y = 0; y < ch; y += 40) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cw, y); ctx.stroke();
+    }
+
+    // 2. Corridors Paths
+    const corridors = s.corridors || [];
+    corridors.forEach(corr => {
+      const rx = toScreenX(corr.x - corr.w / 2);
+      const ry = toScreenY(corr.y - corr.h / 2);
+      const rw = corr.w * scaleX;
+      const rh = corr.h * scaleY;
+
+      ctx.fillStyle = 'rgba(30, 41, 59, 0.7)';
+      ctx.fillRect(rx, ry, rw, rh);
+
+      // Corridor Label
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.6)';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(corr.name, toScreenX(corr.x), toScreenY(corr.y) + 3);
+    });
+
+    // 3. Rooms Layout
+    const rooms = s.rooms || [];
+    rooms.forEach(r => {
+      const rx = toScreenX(r.x - r.w / 2);
+      const ry = toScreenY(r.y - r.h / 2);
+      const rw = r.w * scaleX;
+      const rh = r.h * scaleY;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(rx, ry, rw, rh);
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(rx, ry, rw, rh);
+
+      // Room Title & Icon
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${r.icon || '🛸'} ${r.name}`, toScreenX(r.x), toScreenY(r.y) - 6);
+    });
+
+    // 4. Doors
+    const doors = s.doors || [];
+    doors.forEach(d => {
+      const dx = toScreenX(d.x);
+      const dy = toScreenY(d.y);
+      ctx.fillStyle = d.isOpen ? '#22c55e' : '#ef4444';
+      ctx.beginPath();
+      ctx.arc(dx, dy, 5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // 5. Tasks (Yellow Exclamation Marks)
+    const stations = s.taskStations || [];
+    const myPlayerMeta = (s.playersMeta || []).find(p => p.id === myPlayerId);
+    const completedList = (myPlayerMeta && myPlayerMeta.completedTasksList) || [];
+
+    stations.forEach(st => {
+      const isDone = completedList.includes(st.id);
+      const sx = toScreenX(st.x);
+      const sy = toScreenY(st.y);
+
+      ctx.fillStyle = isDone ? '#10b981' : '#facc15';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(isDone ? '✓' : '!', sx, sy);
+    });
+
+    // 6. Current Player Beacon
+    const myPlayer = (gameState.players || []).find(p => p.id === myPlayerId);
+    if (myPlayer) {
+      const px = toScreenX(myPlayer.x);
+      const py = toScreenY(myPlayer.y);
+
+      // Pulse ring
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, 12, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Center dot
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.arc(px, py, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillText('SEN', px, py - 16);
     }
   }
 }

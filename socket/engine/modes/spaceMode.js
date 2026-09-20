@@ -24,6 +24,8 @@ export class SpaceMode extends BaseMode {
     this.votes = new Map(); // voterId -> targetId ('skip' or playerId)
 
     this.initMap();
+    this.initDoors();
+    this.initCorridors();
     this.initVents();
     this.initTaskStations();
   }
@@ -97,6 +99,34 @@ export class SpaceMode extends BaseMode {
       { id: 'security', name: 'Güvenlik & Kalkan', x: 0, y: 620, w: 520, h: 300, icon: '🛡️' },
       { id: 'o2', name: 'O2 & Yaşam Destek', x: 720, y: -610, w: 380, h: 260, icon: '🍃' },
       { id: 'storage', name: 'Depo & Kargo Bölümü', x: 720, y: 630, w: 420, h: 320, icon: '📦' }
+    ];
+  }
+
+  initDoors() {
+    this.doors = [
+      { id: 'door_cafe_north', name: 'Kafeterya Kuzey Kapısı', x: 0, y: -300, w: 200, h: 28, orientation: 'h', isOpen: false, openTimer: 0 },
+      { id: 'door_cafe_south', name: 'Kafeterya Güney Kapısı', x: 0, y: 240, w: 200, h: 28, orientation: 'h', isOpen: false, openTimer: 0 },
+      { id: 'door_cafe_west', name: 'Kafeterya Batı Kapısı', x: -340, y: 0, w: 28, h: 160, orientation: 'v', isOpen: false, openTimer: 0 },
+      { id: 'door_cafe_east', name: 'Kafeterya Doğu Kapısı', x: 340, y: 0, w: 28, h: 160, orientation: 'v', isOpen: false, openTimer: 0 },
+      { id: 'door_medbay', name: 'Revir Kapısı', x: 0, y: -460, w: 180, h: 28, orientation: 'h', isOpen: false, openTimer: 0 },
+      { id: 'door_security', name: 'Güvenlik Kapısı', x: 0, y: 460, w: 180, h: 28, orientation: 'h', isOpen: false, openTimer: 0 },
+      { id: 'door_reactor', name: 'Reaktör Kapısı', x: -680, y: 0, w: 28, h: 200, orientation: 'v', isOpen: false, openTimer: 0 },
+      { id: 'door_cockpit', name: 'Kokpit Kapısı', x: 700, y: 0, w: 28, h: 200, orientation: 'v', isOpen: false, openTimer: 0 },
+      { id: 'door_electrical', name: 'Elektrik Kapısı', x: -520, y: 550, w: 28, h: 160, orientation: 'v', isOpen: false, openTimer: 0 },
+      { id: 'door_storage', name: 'Depo Kapısı', x: 500, y: 630, w: 28, h: 160, orientation: 'v', isOpen: false, openTimer: 0 },
+      { id: 'door_o2', name: 'O2 Kapısı', x: 520, y: -610, w: 28, h: 140, orientation: 'v', isOpen: false, openTimer: 0 }
+    ];
+  }
+
+  initCorridors() {
+    this.corridors = [
+      { id: 'corr_north', name: 'Kuzey Koridoru (Revir Yolu)', x: 0, y: -380, w: 200, h: 160 },
+      { id: 'corr_south', name: 'Güney Koridoru (Güvenlik Yolu)', x: 0, y: 350, w: 200, h: 160 },
+      { id: 'corr_west', name: 'Batı Ana Koridoru (Reaktör Yolu)', x: -510, y: 0, w: 340, h: 160 },
+      { id: 'corr_east', name: 'Doğu Ana Koridoru (Kokpit Yolu)', x: 520, y: 0, w: 360, h: 160 },
+      { id: 'corr_ne', name: 'Kuzeydoğu Koridoru (O2 Geçişi)', x: 430, y: -450, w: 180, h: 180 },
+      { id: 'corr_se', name: 'Güneydoğu Koridoru (Depo Geçişi)', x: 420, y: 450, w: 180, h: 180 },
+      { id: 'corr_sw', name: 'Güneybatı Koridoru (Elektrik Geçişi)', x: -430, y: 450, w: 180, h: 180 }
     ];
   }
 
@@ -655,6 +685,31 @@ export class SpaceMode extends BaseMode {
         }
       }
     }
+
+    // Automatic Proximity Door Sensors
+    const alivePlayers = playerList.filter(p => !p.isSpectator && p.isAlive && !p.isVented);
+    if (this.doors) {
+      for (const door of this.doors) {
+        let someoneNear = false;
+        for (const p of alivePlayers) {
+          const dist = Math.hypot(p.x - door.x, p.y - door.y);
+          if (dist < 100) {
+            someoneNear = true;
+            break;
+          }
+        }
+
+        if (someoneNear) {
+          door.isOpen = true;
+          door.openTimer = 1.6;
+        } else if (door.openTimer > 0) {
+          door.openTimer -= dt;
+          if (door.openTimer <= 0) {
+            door.isOpen = false;
+          }
+        }
+      }
+    }
   }
 
   applyPlayerMovement(player, dt) {
@@ -705,6 +760,8 @@ export class SpaceMode extends BaseMode {
       impostorsLeft: aliveImpostors,
       bodies: this.bodies,
       rooms: this.roomsList,
+      corridors: this.corridors,
+      doors: this.doors,
       vents: this.vents,
       taskStations: this.taskStations,
       walls: this.walls.map(w => ({ p1: { x: w.p1.x, y: w.p1.y }, p2: { x: w.p2.x, y: w.p2.y } })),

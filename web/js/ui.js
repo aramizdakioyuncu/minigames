@@ -24,6 +24,7 @@ export class UIController {
     // Lobby elements
     this.lobbyUserAvatar = document.getElementById('lobby-user-avatar');
     this.lobbyUserName = document.getElementById('lobby-user-name');
+    this.modesCarousel = document.getElementById('modes-carousel');
     this.roomsList = document.getElementById('rooms-list');
     this.btnRefreshRooms = document.getElementById('btn-refresh-rooms');
     this.btnOpenCreateRoom = document.getElementById('btn-open-create-room');
@@ -261,6 +262,12 @@ export class UIController {
       if (room.mode === 'space') {
         tagClass = 'tag-space';
         tagLabel = '🚀 UZAY CASUSU';
+      } else if (room.mode === 'vampire') {
+        tagClass = 'tag-vampire';
+        tagLabel = '🧛 VAMPİR KÖYLÜ';
+      } else if (room.mode === 'conquest') {
+        tagClass = 'tag-conquest';
+        tagLabel = '🏰 BİL VE FETHET';
       } else if (room.mode === 'sumo') {
         tagClass = 'tag-sumo';
         tagLabel = '🥊 SUMO';
@@ -316,6 +323,33 @@ export class UIController {
       }
 
       this.roomsList.appendChild(item);
+    });
+  }
+
+  renderGameModesCarousel(modes) {
+    if (!this.modesCarousel || !Array.isArray(modes) || modes.length === 0) return;
+    this.modesCarousel.innerHTML = '';
+
+    modes.forEach(mode => {
+      const card = document.createElement('div');
+      card.className = `mode-card card-${mode.id}`;
+      card.style.cursor = 'pointer';
+      const badgeStyle = mode.color
+        ? `background: ${mode.color}25; color: ${mode.color}; border: 1px solid ${mode.color}50;`
+        : '';
+
+      card.innerHTML = `
+        <div class="mode-badge" style="${badgeStyle}">${this.escapeHtml(mode.badge || 'Mod')}</div>
+        <h3>${this.escapeHtml(mode.name)}</h3>
+        <p>${this.escapeHtml(mode.description)}</p>
+      `;
+
+      card.addEventListener('click', () => {
+        const tab = document.querySelector(`.tab-btn[data-filter="${mode.id}"]`);
+        if (tab) tab.click();
+      });
+
+      this.modesCarousel.appendChild(card);
     });
   }
 

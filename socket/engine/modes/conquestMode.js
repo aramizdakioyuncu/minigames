@@ -36,35 +36,49 @@ export class ConquestMode extends BaseMode {
 
   initTerritories() {
     this.territories = [
-      { id: 'istanbul', name: 'İstanbul', x: 280, y: 220, points: 400, ownerId: null, color: '#475569', icon: '🕌' },
-      { id: 'canakkale', name: 'Çanakkale', x: 140, y: 320, points: 250, ownerId: null, color: '#475569', icon: '⚓' },
-      { id: 'izmir', name: 'İzmir', x: 160, y: 540, points: 350, ownerId: null, color: '#475569', icon: '🏛️' },
-      { id: 'bursa', name: 'Bursa', x: 340, y: 360, points: 300, ownerId: null, color: '#475569', icon: '🌲' },
-      { id: 'ankara', name: 'Ankara (Başkent)', x: 560, y: 380, points: 500, ownerId: null, color: '#475569', icon: '⭐' },
-      { id: 'antalya', name: 'Antalya', x: 420, y: 720, points: 350, ownerId: null, color: '#475569', icon: '🌴' },
-      { id: 'konya', name: 'Konya', x: 580, y: 620, points: 250, ownerId: null, color: '#475569', icon: '🌾' },
-      { id: 'samsun', name: 'Samsun', x: 780, y: 200, points: 300, ownerId: null, color: '#475569', icon: '🌊' },
-      { id: 'trabzon', name: 'Trabzon', x: 1080, y: 220, points: 350, ownerId: null, color: '#475569', icon: '⛵' },
-      { id: 'erzurum', name: 'Erzurum', x: 1260, y: 350, points: 300, ownerId: null, color: '#475569', icon: '🏔️' },
-      { id: 'diyarbakir', name: 'Diyarbakır', x: 1220, y: 620, points: 350, ownerId: null, color: '#475569', icon: '🏰' },
-      { id: 'gaziantep', name: 'Gaziantep', x: 920, y: 700, points: 300, ownerId: null, color: '#475569', icon: '🏺' }
+      { id: 'istanbul', name: 'İstanbul', x: -360, y: -180, points: 400, ownerId: null, color: '#475569', icon: '🕌' },
+      { id: 'canakkale', name: 'Çanakkale', x: -500, y: -130, points: 250, ownerId: null, color: '#475569', icon: '⚓' },
+      { id: 'bursa', name: 'Bursa', x: -350, y: -70, points: 300, ownerId: null, color: '#475569', icon: '🌲' },
+      { id: 'izmir', name: 'İzmir (Ege Başkenti)', x: -500, y: 70, points: 350, ownerId: null, color: '#475569', icon: '🏛️' },
+      { id: 'eskisehir', name: 'Eskişehir', x: -200, y: -60, points: 250, ownerId: null, color: '#475569', icon: '🚂' },
+      { id: 'antalya', name: 'Antalya (Akdeniz)', x: -240, y: 240, points: 350, ownerId: null, color: '#475569', icon: '🌴' },
+      { id: 'konya', name: 'Konya', x: -60, y: 140, points: 300, ownerId: null, color: '#475569', icon: '🌾' },
+      { id: 'ankara', name: 'Ankara (Başkent)', x: -40, y: -70, points: 500, ownerId: null, color: '#475569', icon: '⭐' },
+      { id: 'samsun', name: 'Samsun (Kuzey)', x: 80, y: -220, points: 300, ownerId: null, color: '#475569', icon: '🌊' },
+      { id: 'sivas', name: 'Sivas', x: 220, y: -60, points: 250, ownerId: null, color: '#475569', icon: '🛡️' },
+      { id: 'adana', name: 'Adana / Çukurova', x: 120, y: 240, points: 300, ownerId: null, color: '#475569', icon: '🍊' },
+      { id: 'trabzon', name: 'Trabzon (Karadeniz)', x: 380, y: -190, points: 350, ownerId: null, color: '#475569', icon: '⛵' },
+      { id: 'gaziantep', name: 'Gaziantep (Güney)', x: 280, y: 230, points: 300, ownerId: null, color: '#475569', icon: '🏺' },
+      { id: 'erzurum', name: 'Erzurum (Doğu Başkenti)', x: 480, y: -70, points: 350, ownerId: null, color: '#475569', icon: '🏔️' },
+      { id: 'diyarbakir', name: 'Diyarbakır (Güneydoğu)', x: 460, y: 160, points: 350, ownerId: null, color: '#475569', icon: '🏰' },
+      { id: 'van', name: 'Van (Doğu Sınırı)', x: 620, y: 80, points: 300, ownerId: null, color: '#475569', icon: '🌊' }
     ];
 
-    // Adjacency for attacks
-    this.adjacency = {
-      istanbul: ['canakkale', 'bursa', 'ankara'],
-      canakkale: ['istanbul', 'bursa', 'izmir'],
-      izmir: ['canakkale', 'bursa', 'antalya'],
-      bursa: ['istanbul', 'canakkale', 'izmir', 'ankara', 'konya'],
-      ankara: ['istanbul', 'bursa', 'samsun', 'konya', 'antalya'],
-      antalya: ['izmir', 'bursa', 'konya', 'gaziantep'],
-      konya: ['ankara', 'bursa', 'antalya', 'gaziantep'],
-      samsun: ['ankara', 'trabzon', 'erzurum'],
-      trabzon: ['samsun', 'erzurum'],
-      erzurum: ['samsun', 'trabzon', 'diyarbakir'],
-      diyarbakir: ['erzurum', 'gaziantep'],
-      gaziantep: ['konya', 'antalya', 'diyarbakir']
-    };
+    this.connections = [
+      ['canakkale', 'istanbul'], ['canakkale', 'izmir'], ['canakkale', 'bursa'],
+      ['istanbul', 'bursa'], ['istanbul', 'eskisehir'],
+      ['izmir', 'bursa'], ['izmir', 'antalya'],
+      ['bursa', 'eskisehir'], ['bursa', 'antalya'],
+      ['eskisehir', 'ankara'], ['eskisehir', 'konya'],
+      ['antalya', 'konya'], ['antalya', 'adana'],
+      ['ankara', 'samsun'], ['ankara', 'konya'], ['ankara', 'sivas'],
+      ['konya', 'adana'], ['konya', 'sivas'],
+      ['samsun', 'sivas'], ['samsun', 'trabzon'],
+      ['adana', 'gaziantep'],
+      ['sivas', 'erzurum'], ['sivas', 'gaziantep'], ['sivas', 'diyarbakir'],
+      ['trabzon', 'erzurum'],
+      ['gaziantep', 'diyarbakir'],
+      ['erzurum', 'diyarbakir'], ['erzurum', 'van'],
+      ['diyarbakir', 'van']
+    ];
+
+    // Adjacency map
+    this.adjacency = {};
+    this.territories.forEach(t => { this.adjacency[t.id] = []; });
+    this.connections.forEach(([a, b]) => {
+      if (this.adjacency[a]) this.adjacency[a].push(b);
+      if (this.adjacency[b]) this.adjacency[b].push(a);
+    });
   }
 
   initQuestions() {
@@ -118,7 +132,6 @@ export class ConquestMode extends BaseMode {
   }
 
   onPlayerLeave(player) {
-    // If player held territories, make them neutral
     for (const t of this.territories) {
       if (t.ownerId === player.id) {
         t.ownerId = null;
@@ -141,9 +154,32 @@ export class ConquestMode extends BaseMode {
     this.scores.clear();
 
     const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
-    players.forEach(p => {
-      this.scores.set(p.id, 0);
-      p.score = 0;
+    
+    // 8 Geographically Opposite Starting Bases
+    const OPPOSITE_STARTS = [
+      'izmir',        // 1. Batı (Ege)
+      'erzurum',      // 2. Doğu (Doğu Anadolu)
+      'istanbul',     // 3. Kuzeybatı (Marmara)
+      'diyarbakir',   // 4. Güneydoğu (Güneydoğu Anadolu)
+      'trabzon',      // 5. Kuzeydoğu (Doğu Karadeniz)
+      'antalya',      // 6. Güneybatı (Akdeniz)
+      'samsun',       // 7. Kuzey (Orta Karadeniz)
+      'gaziantep'     // 8. Güney (Güneydoğu Geçit)
+    ];
+
+    players.forEach((p, idx) => {
+      this.scores.set(p.id, 300);
+      p.score = 300;
+
+      const baseCityId = OPPOSITE_STARTS[idx % OPPOSITE_STARTS.length];
+      const baseCity = this.territories.find(t => t.id === baseCityId);
+      if (baseCity) {
+        baseCity.ownerId = p.id;
+        baseCity.ownerName = p.name;
+        baseCity.color = p.color || '#3b82f6';
+        baseCity.isCapital = true;
+        baseCity.points = 300;
+      }
     });
 
     this.room.broadcastEvent({
@@ -151,7 +187,7 @@ export class ConquestMode extends BaseMode {
       caller: callerName,
       message: '🏰 BİL VE FETHET BAŞLADI!'
     });
-    this.room.broadcastChat('Sistem', `🏰 Bil ve Fethet ${callerName} tarafından başlatıldı! Topraklarınızı fethedin!`, '#f59e0b');
+    this.room.broadcastChat('Sistem', `🏰 Bil ve Fethet başladı! Oyuncular zıt kenarlardaki başkent kalelerinden sefere çıktı!`, '#f59e0b');
 
     this.startQuestionPhase();
   }

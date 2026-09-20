@@ -47,6 +47,24 @@ const GAME_MODES = [
     description: 'Uzay gemisinde görevleri tamamla ya da casus olarak mürettebatı gizlice avla! Havalandırmaları kullan, cesetleri bildir, acil toplantıda casusu oyla.',
     maxPlayers: 10,
     controls: ['WASD / Yön Tuşları: Hareket', 'E / F / Boşluk: Görev Yap / Buton Bas', 'Q: Öldür (Casus)', 'V: Havalandırma (Vent - Casus)', 'R: Ceset Bildir (Report)']
+  },
+  {
+    id: 'vampire',
+    name: '🧛 Vampir Köylü (Vampire & Villager)',
+    badge: 'Sosyal Çıkarım & Gizli Rol',
+    color: '#dc2626',
+    description: 'Gece kasabaya sis çöktüğünde vampirler kurban arar! Doktor korur, kahin araştırır, gündüz köy meydanında şüpheliler darağacına gönderilir.',
+    maxPlayers: 12,
+    controls: ['WASD / Yön Tuşları: Köyde Gezinme', 'Gece / Mahkeme: Eylem ve İdam Oylaması', 'Enter: Köy Sohbeti']
+  },
+  {
+    id: 'conquest',
+    name: '🏰 Bil ve Fethet (Trivia Territory Conquest)',
+    badge: 'Bilgi & Strateji',
+    color: '#d97706',
+    description: 'Tarih, coğrafya, bilim ve rekorlar hakkında klasik tahmin soruları! En yakın ve en hızlı cevabı veren Türkiye haritasındaki şehirleri fetheder.',
+    maxPlayers: 8,
+    controls: ['Klavye / Ekran Tuş Takımı: Sayısal Tahmin Girişi', 'Sol Tık: Haritadan Şehir Seç & Fethet', 'Enter: Cevabı Onayla']
   }
 ];
 

@@ -26,6 +26,57 @@ function initDefaultRooms() {
   }
 }
 
+const GAME_MODES_META = [
+  {
+    id: 'puck',
+    name: '⚽ Disk Futbolu',
+    badge: 'Takım Oyunu',
+    color: '#3b82f6',
+    description: '2D fizik tabanlı nostaljik futbol! Kırmızı ve Mavi takım diskiyle topa şut çek, çalım at, golleri sırala.',
+    maxPlayers: 8
+  },
+  {
+    id: 'space',
+    name: '🚀 Uzay Casusu',
+    badge: 'Gizli Rol & Hayatta Kalma',
+    color: '#a855f7',
+    description: 'Uzay gemisinde görevleri tamamla ya da casus olarak mürettebatı gizlice avla! Havalandırmaları kullan, cesetleri bildir.',
+    maxPlayers: 10
+  },
+  {
+    id: 'vampire',
+    name: '🧛 Vampir Köylü',
+    badge: 'Sosyal Çıkarım',
+    color: '#ef4444',
+    description: 'Gece kasabaya sis çöktüğünde vampirler kurban arar! Doktor korur, kahin araştırır, gündüz şüpheliler darağacına gönderilir.',
+    maxPlayers: 12
+  },
+  {
+    id: 'conquest',
+    name: '🏰 Bil ve Fethet',
+    badge: 'Bilgi & Strateji',
+    color: '#f59e0b',
+    description: 'Tarih, coğrafya, bilim ve rekorlar tahmin soruları! En yakın ve en hızlı cevabı veren şehirleri fetheder.',
+    maxPlayers: 8
+  },
+  {
+    id: 'sumo',
+    name: '🥊 Sumo Knockout',
+    badge: 'Battle Royale',
+    color: '#ef4444',
+    description: 'Düşmanlarını daralan çemberin dışına fırlat! Dash yeteneğinle rakiplerine sert darbeler indir.',
+    maxPlayers: 10
+  },
+  {
+    id: 'agar',
+    name: '🟢 Agar Büyüme',
+    badge: 'Büyüme & Kaos',
+    color: '#10b981',
+    description: 'Arenadaki enerji kürelerini yut, kütleni büyüt, bölünüp yem fırlatarak liderlik tablosunun zirvesine yerleş!',
+    maxPlayers: 20
+  }
+];
+
 initDefaultRooms();
 
 console.log(`🚀 [Socket Server] WebSocket Oyun Sunucusu port ${PORT} üzerinde dinlemede...`);
@@ -35,11 +86,12 @@ wss.on('connection', (ws) => {
   let currentRoom = null;
   let playerRef = null;
 
-  // Send initial room list
+  // Send initial room list & modes metadata
   send(ws, {
     type: 'init',
     playerId,
-    rooms: getPublicRoomsList()
+    rooms: getPublicRoomsList(),
+    modes: GAME_MODES_META
   });
 
   ws.on('message', (message) => {
