@@ -136,6 +136,52 @@ export class UIController {
     this.chatForm = document.getElementById('chat-form');
     this.chatInput = document.getElementById('chat-input');
 
+    // Vampire Mode HUD Elements
+    this.hudVampire = document.getElementById('hud-vampire');
+    this.vampirePhaseBadge = document.getElementById('vampire-phase-badge');
+    this.vampireDayCount = document.getElementById('vampire-day-count');
+    this.vampirePhaseTimer = document.getElementById('vampire-phase-timer');
+    this.vampireAliveCount = document.getElementById('vampire-alive-count');
+    this.vampireRoleBadge = document.getElementById('vampire-role-badge');
+
+    // Vampire Role Reveal Modal
+    this.modalVampireRole = document.getElementById('modal-vampire-role');
+    this.vampireRevealIcon = document.getElementById('vampire-reveal-icon');
+    this.vampireRevealTitle = document.getElementById('vampire-reveal-title');
+    this.vampireRevealDesc = document.getElementById('vampire-reveal-desc');
+    this.vampireTeamList = document.getElementById('vampire-team-list');
+    this.btnCloseVampireRole = document.getElementById('btn-close-vampire-role');
+    if (this.btnCloseVampireRole) {
+      this.btnCloseVampireRole.addEventListener('click', () => {
+        if (this.modalVampireRole) this.modalVampireRole.classList.add('hidden');
+      });
+    }
+
+    // Vampire Night Action Modal
+    this.modalVampireAction = document.getElementById('modal-vampire-action');
+    this.vampireActionIcon = document.getElementById('vampire-action-icon');
+    this.vampireActionTitle = document.getElementById('vampire-action-title');
+    this.vampireActionDesc = document.getElementById('vampire-action-desc');
+    this.vampireActionGrid = document.getElementById('vampire-action-grid');
+    this.btnVampireActionSkip = document.getElementById('btn-vampire-action-skip');
+
+    // Vampire Trial Modal
+    this.modalVampireTrial = document.getElementById('modal-vampire-trial');
+    this.trialTimerText = document.getElementById('trial-timer-text');
+    this.trialCandidatesGrid = document.getElementById('trial-candidates-grid');
+    this.btnTrialSkipVote = document.getElementById('btn-trial-skip-vote');
+    this.trialSkipCount = document.getElementById('trial-skip-count');
+
+    // Vampire Seer Result Modal
+    this.modalVampireSeerResult = document.getElementById('modal-vampire-seer-result');
+    this.seerResultContent = document.getElementById('seer-result-content');
+    this.btnCloseSeerResult = document.getElementById('btn-close-seer-result');
+    if (this.btnCloseSeerResult) {
+      this.btnCloseSeerResult.addEventListener('click', () => {
+        if (this.modalVampireSeerResult) this.modalVampireSeerResult.classList.add('hidden');
+      });
+    }
+
     // Goal Announcement
     this.goalAnnouncement = document.getElementById('goal-announcement');
     this.goalText = document.getElementById('goal-text');
@@ -822,6 +868,174 @@ export class UIController {
         item.style.opacity = '0.3';
       }
     }, 12000);
+  }
+
+  showVampireRoleReveal(role, vampireTeam) {
+    if (!this.modalVampireRole) return;
+    const roleInfo = {
+      vampire: {
+        icon: '🧛',
+        title: 'SEN BİR VAMPİRSİN',
+        color: '#ef4444',
+        desc: 'Gece çöktüğünde diğer vampirlerle birlikte kurbanını seç ve köylüleri gizlice avla!'
+      },
+      doctor: {
+        icon: '🧙‍♂️',
+        title: 'SEN BİR DOKTORSUN',
+        color: '#06b6d4',
+        desc: 'Her gece bir köylüyü koruma altına alarak vampir saldırılarından kurtar!'
+      },
+      seer: {
+        icon: '🔮',
+        title: 'SEN BİR KAHİNSİN',
+        color: '#a855f7',
+        desc: 'Her gece bir oyuncunun kimliğini sorgula ve kimin vampir olduğunu öğren!'
+      },
+      hunter: {
+        icon: '🏹',
+        title: 'SEN BİR AVCISIN',
+        color: '#f59e0b',
+        desc: 'Öldürüldüğünde son kurşununla şüphelendiğin bir kişiyi yanında götür!'
+      },
+      villager: {
+        icon: '🧑‍🌾',
+        title: 'SEN BİR KÖYLÜSÜN',
+        color: '#10b981',
+        desc: 'Masum bir kasaba sakinisin. Gündüz tartışmalarına katıl ve oylamayla vampirleri as!'
+      }
+    };
+
+    const r = roleInfo[role] || roleInfo.villager;
+    if (this.vampireRevealIcon) this.vampireRevealIcon.textContent = r.icon;
+    if (this.vampireRevealTitle) {
+      this.vampireRevealTitle.textContent = r.title;
+      this.vampireRevealTitle.style.color = r.color;
+    }
+    if (this.vampireRevealDesc) this.vampireRevealDesc.textContent = r.desc;
+
+    if (this.vampireTeamList) {
+      this.vampireTeamList.innerHTML = '';
+      if (role === 'vampire' && Array.isArray(vampireTeam) && vampireTeam.length > 0) {
+        const teamHeader = document.createElement('div');
+        teamHeader.innerHTML = '<b>🩸 Diğer Vampirler:</b>';
+        teamHeader.style.marginBottom = '6px';
+        this.vampireTeamList.appendChild(teamHeader);
+
+        vampireTeam.forEach(t => {
+          const pill = document.createElement('div');
+          pill.className = 'vampire-teammate-pill';
+          pill.textContent = `${t.avatar || '🧛'} ${t.name}`;
+          this.vampireTeamList.appendChild(pill);
+        });
+      }
+    }
+
+    this.modalVampireRole.classList.remove('hidden');
+  }
+
+  openVampireNightModal(role, playersMeta, myPlayerId, onSelectAction, onSkipAction) {
+    if (!this.modalVampireAction) return;
+
+    const titles = {
+      vampire: { icon: '🧛', title: 'VAMPİR AV EYLEMİ', desc: 'Kanını emeceğiniz kurbanı seçin:' },
+      doctor: { icon: '🧙‍♂️', title: 'DOKTOR ŞİFA EYLEMİ', desc: 'Bu gece korumak istediğiniz köylüyü seçin:' },
+      seer: { icon: '🔮', title: 'KAHİN KEHANET EYLEMİ', desc: 'Kimliğini sorgulamak istediğiniz oyuncuyu seçin:' }
+    };
+
+    const t = titles[role] || { icon: '🌙', title: 'GECE EYLEMİ', desc: 'Hedefinizi seçin:' };
+    if (this.vampireActionIcon) this.vampireActionIcon.textContent = t.icon;
+    if (this.vampireActionTitle) this.vampireActionTitle.textContent = t.title;
+    if (this.vampireActionDesc) this.vampireActionDesc.textContent = t.desc;
+
+    if (this.vampireActionGrid) {
+      this.vampireActionGrid.innerHTML = '';
+      const aliveTargets = (playersMeta || []).filter(p => p.isAlive && p.id !== myPlayerId);
+
+      aliveTargets.forEach(target => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-vampire-target';
+        btn.innerHTML = `
+          <span class="vampire-target-avatar">${target.avatar || '👤'}</span>
+          <span class="vampire-target-name">${this.escapeHtml(target.name)}</span>
+        `;
+        btn.addEventListener('click', () => {
+          this.vampireActionGrid.querySelectorAll('.btn-vampire-target').forEach(b => b.classList.remove('selected-target'));
+          btn.classList.add('selected-target');
+          if (onSelectAction) onSelectAction(target.id);
+        });
+        this.vampireActionGrid.appendChild(btn);
+      });
+    }
+
+    if (this.btnVampireActionSkip) {
+      this.btnVampireActionSkip.onclick = () => {
+        if (onSkipAction) onSkipAction();
+        this.modalVampireAction.classList.add('hidden');
+      };
+    }
+
+    this.modalVampireAction.classList.remove('hidden');
+  }
+
+  openVampireTrialModal(playersMeta, myPlayerId, onVote, onSkipVote) {
+    if (!this.modalVampireTrial) return;
+
+    if (this.trialCandidatesGrid) {
+      this.trialCandidatesGrid.innerHTML = '';
+      const aliveCandidates = (playersMeta || []).filter(p => p.isAlive);
+
+      aliveCandidates.forEach(cand => {
+        const card = document.createElement('div');
+        card.className = 'trial-candidate-card';
+        card.dataset.id = cand.id;
+        card.innerHTML = `
+          <div>
+            <span>${cand.avatar || '👤'}</span>
+            <b>${this.escapeHtml(cand.name)}${cand.id === myPlayerId ? ' (Sen)' : ''}</b>
+          </div>
+          <span class="trial-vote-count-badge" id="trial-votes-${cand.id}">0</span>
+        `;
+        card.addEventListener('click', () => {
+          this.trialCandidatesGrid.querySelectorAll('.trial-candidate-card').forEach(c => c.classList.remove('voted'));
+          card.classList.add('voted');
+          if (onVote) onVote(cand.id);
+        });
+        this.trialCandidatesGrid.appendChild(card);
+      });
+    }
+
+    if (this.btnTrialSkipVote) {
+      this.btnTrialSkipVote.onclick = () => {
+        if (this.trialCandidatesGrid) {
+          this.trialCandidatesGrid.querySelectorAll('.trial-candidate-card').forEach(c => c.classList.remove('voted'));
+        }
+        if (onSkipVote) onSkipVote();
+      };
+    }
+
+    this.modalVampireTrial.classList.remove('hidden');
+  }
+
+  updateVampireTrialVoteCounts(counts = {}, skipCount = 0) {
+    if (this.trialCandidatesGrid) {
+      for (const [id, count] of Object.entries(counts)) {
+        const badge = document.getElementById(`trial-votes-${id}`);
+        if (badge) badge.textContent = count;
+      }
+    }
+    if (this.trialSkipCount) {
+      this.trialSkipCount.textContent = skipCount;
+    }
+  }
+
+  showVampireSeerResult(targetName, isVampire) {
+    if (!this.modalVampireSeerResult || !this.seerResultContent) return;
+    this.seerResultContent.className = `seer-result-content ${isVampire ? 'seer-result-vampire' : 'seer-result-innocent'}`;
+    this.seerResultContent.innerHTML = isVampire
+      ? `🚨 <b>${this.escapeHtml(targetName)}</b> bir <b>VAMPİR</b>!`
+      : `✨ <b>${this.escapeHtml(targetName)}</b> bir <b>MASUM</b> (Vampir Değil).`;
+
+    this.modalVampireSeerResult.classList.remove('hidden');
   }
 
   escapeHtml(str) {

@@ -184,6 +184,11 @@
               <span class="mode-radio-icon">🟢</span>
               <span class="mode-radio-title">Agar Feed</span>
             </label>
+            <label class="mode-radio-card">
+              <input type="radio" name="create-room-mode" value="vampire">
+              <span class="mode-radio-icon">🧛</span>
+              <span class="mode-radio-title">Vampir Köylü</span>
+            </label>
           </div>
         </div>
 
@@ -300,6 +305,25 @@
             </div>
           </div>
           <div class="space-role-pill" id="space-role-badge">🛠️ MÜRETTEBAT</div>
+        </div>
+      </div>
+
+      <!-- HUD: Vampire & Villager Status -->
+      <div class="hud-vampire glass-card hidden" id="hud-vampire">
+        <div class="vampire-hud-left">
+          <div class="vampire-phase-pill" id="vampire-phase-badge">🏰 LOBİ (Köy Meydanı)</div>
+          <div class="vampire-day-badge">
+            📅 <span id="vampire-day-label">Gün</span>: <b id="vampire-day-count">1</b>
+          </div>
+          <div class="vampire-timer-badge">
+            ⏱️ <b id="vampire-phase-timer">0</b>s
+          </div>
+        </div>
+        <div class="vampire-hud-right">
+          <div class="vampire-alive-badge">
+            👥 Yaşayan: <b id="vampire-alive-count">0</b>
+          </div>
+          <div class="vampire-role-pill" id="vampire-role-badge">🧑‍🌾 KÖYLÜ</div>
         </div>
       </div>
 
@@ -511,6 +535,77 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- 8. VAMPIRE ROLE REVEAL MODAL -->
+      <div id="modal-vampire-role" class="modal-overlay hidden">
+        <div class="glass-card vampire-role-card">
+          <div class="vampire-role-header">
+            <span class="vampire-role-icon" id="vampire-reveal-icon">🧛</span>
+            <h2 id="vampire-reveal-title">VAMPİR</h2>
+          </div>
+          <div class="vampire-role-body">
+            <p id="vampire-reveal-desc">Gece vakti diğer vampirlerle birlikte kurbanını seç ve köylüleri gizlice avla!</p>
+            <div class="vampire-team-list" id="vampire-team-list"></div>
+          </div>
+          <div class="vampire-role-footer">
+            <button class="btn btn-primary" id="btn-close-vampire-role">Anladım</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9. VAMPIRE NIGHT ACTION MODAL -->
+      <div id="modal-vampire-action" class="modal-overlay hidden">
+        <div class="glass-card vampire-action-card">
+          <div class="vampire-action-header">
+            <span class="vampire-action-icon" id="vampire-action-icon">🌙</span>
+            <div>
+              <h3 id="vampire-action-title">GECE EYLEMİ</h3>
+              <p id="vampire-action-desc">Hedefinizi seçin:</p>
+            </div>
+          </div>
+          <div class="vampire-action-grid" id="vampire-action-grid">
+            <!-- Dynamic Player Action Buttons -->
+          </div>
+          <div class="vampire-action-footer">
+            <button class="btn btn-secondary" id="btn-vampire-action-skip">Pas Geç</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 10. VAMPIRE TRIAL & EXECUTION MODAL -->
+      <div id="modal-vampire-trial" class="modal-overlay hidden">
+        <div class="glass-card trial-card">
+          <div class="trial-header">
+            <div class="trial-gavel">⚖️</div>
+            <div class="trial-info">
+              <h2>KÖY MAHKEMESİ & İDAM OYLAMASI</h2>
+              <p>Darağacına göndermek istediğiniz şüpheliyi seçin:</p>
+            </div>
+            <div class="trial-timer-badge">
+              ⏱️ <span id="trial-timer-text">25</span>s
+            </div>
+          </div>
+          <div class="trial-candidates-grid" id="trial-candidates-grid">
+            <!-- Dynamic Candidate Cards -->
+          </div>
+          <div class="trial-footer">
+            <button id="btn-trial-skip-vote" class="btn btn-secondary">
+              <span>Pas Geç (Kimseyi Asma)</span>
+              <span class="skip-count-badge" id="trial-skip-count">0</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 11. VAMPIRE SEER INVESTIGATION BANNER -->
+      <div id="modal-vampire-seer-result" class="modal-overlay hidden">
+        <div class="glass-card seer-card">
+          <div class="seer-icon">🔮</div>
+          <h3>KEHANET SONUCU</h3>
+          <div class="seer-result-content" id="seer-result-content"></div>
+          <button class="btn btn-primary" id="btn-close-seer-result">Kapat</button>
         </div>
       </div>
 

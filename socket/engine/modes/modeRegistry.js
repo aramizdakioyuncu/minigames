@@ -4,6 +4,7 @@ import { PuckMode } from './puckMode.js';
 import { SumoMode } from './sumoMode.js';
 import { AgarMode } from './agarMode.js';
 import { SpaceMode } from './spaceMode.js';
+import { VampireMode } from './vampireMode.js';
 
 class ModeRegistry {
   constructor() {
@@ -16,6 +17,7 @@ class ModeRegistry {
     this.register('sumo', SumoMode);
     this.register('agar', AgarMode);
     this.register('space', SpaceMode);
+    this.register('vampire', VampireMode);
   }
 
   /**

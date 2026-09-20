@@ -172,6 +172,38 @@ wss.on('connection', (ws) => {
               break;
             }
 
+            // In Vampire mode, night chat is reserved exclusively for the secret Vampire frequency
+            if (currentRoom.modeType === 'vampire' && currentRoom.mode && currentRoom.mode.gameState === 'night') {
+              if (playerRef.role === 'vampire') {
+                const cleanText = data.text.trim().substring(0, 100);
+                if (cleanText.length > 0) {
+                  for (const p of currentRoom.players.values()) {
+                    if (p.role === 'vampire' && p.ws && p.ws.readyState === 1) {
+                      send(p.ws, {
+                        type: 'chat',
+                        id: 'vamp_' + Math.random().toString(36).substring(2, 7),
+                        sender: `🧛 [Vampir] ${playerRef.name}`,
+                        text: cleanText,
+                        color: '#ef4444',
+                        time: Date.now()
+                      });
+                    }
+                  }
+                }
+                break;
+              } else {
+                send(ws, {
+                  type: 'chat',
+                  id: 'sys_' + Math.random().toString(36).substring(2, 7),
+                  sender: 'Sistem',
+                  text: '🌙 Gece vakti köylüler uykuda! Konuşmak için sabah köy çanını bekleyin.',
+                  color: '#818cf8',
+                  time: Date.now()
+                });
+                break;
+              }
+            }
+
             const cleanText = data.text.trim().substring(0, 100);
             if (cleanText.length > 0) {
               currentRoom.broadcastChat(playerRef.name, cleanText, playerRef.color);

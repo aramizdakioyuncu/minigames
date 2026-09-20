@@ -633,7 +633,79 @@ class GameApp {
             }
             this.ui.showEjectionScreen(evt.ejected, evt.isTie, evt.isSkip, evt.message);
           } else if (evt.type === 'game_over') {
-            this.ui.showGoalBanner('🏆 OYUN BİTTİ!', evt.winner === 'impostor' ? '🚨 Casuslar Kazandı!' : '✨ Mürettebat Kazandı!');
+            const winTitle = evt.winner === 'impostor'
+              ? '🚨 Casuslar Kazandı!'
+              : (evt.winner === 'vampires'
+                ? '🩸 Vampirler Kazandı!'
+                : (evt.winner === 'villagers' ? '🏰 Köylüler Kazandı!' : '✨ Mürettebat Kazandı!'));
+            this.ui.showGoalBanner('🏆 OYUN BİTTİ!', winTitle);
+          } else if (evt.type === 'vampire_match_started') {
+            audio.playVillageBell();
+            this.ui.showGoalBanner('🧛 VAMPİR KÖYLÜ BAŞLADI!', 'Rolünüz belirleniyor...');
+          } else if (evt.type === 'vampire_role_assigned') {
+            this.myVampireRole = evt.role;
+            this.ui.showVampireRoleReveal(evt.role, evt.vampireTeam);
+          } else if (evt.type === 'vampire_night_started') {
+            audio.playWolfHowl();
+            if (this.myVampireRole && (this.myVampireRole === 'vampire' || this.myVampireRole === 'doctor' || this.myVampireRole === 'seer')) {
+              this.ui.openVampireNightModal(
+                this.myVampireRole,
+                this.lastGameState?.modeState?.playersMeta,
+                this.socket.myPlayerId,
+                (targetId) => {
+                  const actType = this.myVampireRole === 'vampire' ? 'vampire_vote' : (this.myVampireRole === 'doctor' ? 'doctor_heal' : 'seer_investigate');
+                  this.socket.sendAction({ type: actType, targetId });
+                },
+                () => {
+                  this.socket.sendAction({ type: 'vampire_vote', targetId: 'skip' });
+                }
+              );
+            }
+          } else if (evt.type === 'vampire_day_started') {
+            audio.playVillageBell();
+            if (this.ui.modalVampireAction) this.ui.modalVampireAction.classList.add('hidden');
+          } else if (evt.type === 'vampire_trial_started') {
+            audio.playGavel();
+            this.ui.openVampireTrialModal(
+              this.lastGameState?.modeState?.playersMeta,
+              this.socket.myPlayerId,
+              (targetId) => {
+                this.socket.sendAction({ type: 'trial_vote', targetId });
+              },
+              () => {
+                this.socket.sendAction({ type: 'trial_vote', targetId: 'skip' });
+              }
+            );
+          } else if (evt.type === 'vampire_vote_counts_update') {
+            this.ui.updateVampireTrialVoteCounts(evt.counts, evt.skipCount);
+          } else if (evt.type === 'vampire_trial_result') {
+            audio.playGavel();
+            if (this.ui.modalVampireTrial) this.ui.modalVampireTrial.classList.add('hidden');
+            const rep = evt.report || {};
+            if (rep.executed) {
+              this.ui.showGoalBanner('⚖️ İDAM EDİLDİ!', `${rep.executed.name} (${(rep.role || 'Köylü').toUpperCase()})`);
+            } else {
+              this.ui.showGoalBanner('⚖️ MAHKEME SONUCU', 'Yeterli çoğunluk sağlanamadı.');
+            }
+          } else if (evt.type === 'vampire_seer_result') {
+            this.ui.showVampireSeerResult(evt.targetName, evt.isVampire);
+          } else if (evt.type === 'vampire_hunter_prompt') {
+            audio.playBite();
+            this.ui.openVampireTrialModal(
+              this.lastGameState?.modeState?.playersMeta,
+              this.socket.myPlayerId,
+              (targetId) => {
+                this.socket.sendAction({ type: 'hunter_revenge', targetId });
+                if (this.ui.modalVampireTrial) this.ui.modalVampireTrial.classList.add('hidden');
+              },
+              null
+            );
+          } else if (evt.type === 'sfx_village_bell') {
+            audio.playVillageBell();
+          } else if (evt.type === 'sfx_wolf_howl') {
+            audio.playWolfHowl();
+          } else if (evt.type === 'sfx_gavel') {
+            audio.playGavel();
           } else if (evt.type === 'goal') {
             const myPlayer = (state.players || []).find(p => p.id === this.socket.myPlayerId);
             if (myPlayer && myPlayer.team) {
