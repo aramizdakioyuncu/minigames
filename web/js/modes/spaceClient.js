@@ -1,141 +1,35 @@
+import { SpaceScene } from './space/spaceScene.js';
 // spaceClient.js - Modular Frontend Client for Uzay Casusu (Spaceship, Castle, Mansion)
 
 import { BaseClientMode } from './BaseClientMode.js';
-import { SpaceshipThemeRenderer } from './space/themes/spaceshipTheme.js';
-import { CastleThemeRenderer } from './space/themes/castleTheme.js';
-import { MansionThemeRenderer } from './space/themes/mansionTheme.js';
 import { SpaceMinimapRenderer } from './space/spaceMinimap.js';
 import { SpaceSabotageController } from './space/spaceSabotage.js';
+import { SpacePanels } from './space/spacePanels.js';
 
 export class SpaceClientMode extends BaseClientMode {
   constructor() {
     super('space');
-    this.animTime = 0;
-    this.spaceshipTheme = new SpaceshipThemeRenderer();
-    this.castleTheme = new CastleThemeRenderer();
-    this.mansionTheme = new MansionThemeRenderer();
-    this.minimapRenderer = new SpaceMinimapRenderer();
-    this.sabotageController = new SpaceSabotageController();
-
-    this.currentLoadedTheme = null;
-    this.spritesInitialized = false;
-    this.propsContainer = null;
+    this.scene=new SpaceScene();
+    this.minimapRenderer=new SpaceMinimapRenderer();
+    this.sabotageController=new SpaceSabotageController();
   }
-
-  isFixedArena() {
-    return false;
+  isFixedArena() {return false;}
+  getArenaDimensions(state) {return {width:state?.modeState.width||2800,height:state?.modeState.height||1800};}
+  onActivate(roomData,ui) {
+    if(!this.panels)this.panels=new SpacePanels();
+    this.panels.reset();
+    this.panels.restoreColor();
+    for(const element of [ui.hudPuck,ui.hudSumo,ui.hudAgar,ui.hudLeaderboard,ui.hudTeamSwitcher]) element?.classList.add('hidden');
+    ui.hudSpace?.classList.remove('hidden');
   }
-
-  getArenaDimensions(gameState) {
-    const s = (gameState && gameState.modeState) || {};
-    return {
-      width: s.width || 2800,
-      height: s.height || 1800
-    };
-  }
-
-  onActivate(roomData, ui) {
-    if (ui.hudPuck) ui.hudPuck.classList.add('hidden');
-    if (ui.hudSumo) ui.hudSumo.classList.add('hidden');
-    if (ui.hudAgar) ui.hudAgar.classList.add('hidden');
-    if (ui.hudSpace) ui.hudSpace.classList.remove('hidden');
-    if (ui.hudLeaderboard) ui.hudLeaderboard.classList.add('hidden');
-    if (ui.hudTeamSwitcher) ui.hudTeamSwitcher.classList.add('hidden');
-    if (ui.hudChat) ui.hudChat.classList.add('hidden');
-  }
-
   onDeactivate(ui) {
-    if (ui.hudSpace) ui.hudSpace.classList.add('hidden');
-    if (ui.modalMeeting) ui.modalMeeting.classList.add('hidden');
-    if (ui.modalTaskInteractive) ui.modalTaskInteractive.classList.add('hidden');
-    if (ui.hudChat) ui.hudChat.classList.remove('hidden');
-    if (this.propsContainer && this.propsContainer.parent) {
-      this.propsContainer.parent.removeChild(this.propsContainer);
-      this.propsContainer = null;
-      this.spritesInitialized = false;
-      this.currentLoadedTheme = null;
-    }
+    this.panels?.reset();this.scene.destroy();
+    for(const element of [ui.hudSpace,ui.modalMeeting,ui.modalTaskInteractive])element?.classList.add('hidden');
+    ui.hudChat?.classList.remove('hidden');
   }
-
-  setupSprites(renderer, theme = 'spaceship') {
-    if (this.currentLoadedTheme !== theme) {
-      if (this.propsContainer && this.propsContainer.parent) {
-        this.propsContainer.parent.removeChild(this.propsContainer);
-        this.propsContainer = null;
-      }
-      this.spritesInitialized = false;
-      this.currentLoadedTheme = theme;
-    }
-
-    if (this.spritesInitialized || !renderer || !renderer.world || typeof window.PIXI === 'undefined') return;
-    this.spritesInitialized = true;
-
-    this.propsContainer = new PIXI.Container();
-    if (renderer.envGraphics && renderer.world.children.includes(renderer.envGraphics)) {
-      const envIdx = renderer.world.getChildIndex(renderer.envGraphics);
-      renderer.world.addChildAt(this.propsContainer, envIdx + 1);
-    } else {
-      renderer.world.addChild(this.propsContainer);
-    }
-
-    if (theme === 'spaceship') {
-      this.spaceshipTheme.setupSprites(this.propsContainer);
-    }
-  }
-
-  renderEnvironment(renderer, g, gameState) {
-    const s = (gameState && gameState.modeState) || {};
-    const t = performance.now() / 1000;
-    this.animTime += 0.03;
-
-    const theme = s.mapTheme || 'spaceship';
-    this.setupSprites(renderer, theme);
-
-    if (theme === 'castle') {
-      this.castleTheme.renderEnvironment(g, s, t, this.animTime);
-    } else if (theme === 'mansion') {
-      this.mansionTheme.renderEnvironment(g, s, t, this.animTime);
-    } else {
-      this.spaceshipTheme.renderEnvironment(g, s, t, this.animTime);
-    }
-  }
-
-  renderEntities(renderer, g, gameState, entities, myPlayerId) {
-    const s = gameState.modeState || {};
-    const deadBodies = s.deadBodies || [];
-    const myP = (gameState.players || []).find(p => p.id === myPlayerId);
-    const isMeeting = s.gameState === 'meeting';
-    const isDead = myP && !myP.isAlive;
-    const isImpostor = myP && myP.role === 'impostor';
-    const lightsOut = s.sabotage && s.sabotage.active && s.sabotage.type === 'lights';
-
-    const visionRad = (isDead || isMeeting) ? 2200 : (lightsOut ? (isImpostor ? 320 : 120) : (isImpostor ? 380 : 300));
-
-    // Render Dead Bodies on Floor
-    deadBodies.forEach(b => {
-      if (myP && !isDead && !isMeeting) {
-        const dist = Math.hypot(b.x - myP.x, b.y - myP.y);
-        if (dist > visionRad + 30) return;
-      }
-      g.lineStyle(3, 0xef4444, 0.95);
-      g.beginFill(0x991b1b, 0.9);
-      g.drawCircle(b.x, b.y, 16);
-      g.endFill();
-
-      // Skull bone / cross
-      g.lineStyle(2, 0xffffff, 0.9);
-      g.moveTo(b.x - 7, b.y - 7);
-      g.lineTo(b.x + 7, b.y + 7);
-      g.moveTo(b.x + 7, b.y - 7);
-      g.lineTo(b.x - 7, b.y + 7);
-    });
-
-    // Impostor Kill Range Indicator Ring
-    if (isImpostor && myP && myP.isAlive && s.gameState === 'playing') {
-      g.lineStyle(1.5, 0xef4444, 0.45);
-      g.drawCircle(myP.x, myP.y, s.killDistance || 85);
-    }
-  }
+  renderEnvironment() {}
+  renderEntities(renderer,g,state,entities,myId) {this.scene.renderWebGL(renderer,state,myId);}
+  renderCanvas(renderer,ctx,state,myId) {this.scene.renderCanvas(renderer,ctx,state,myId);}
 
   updateHUD(ui, gameState, myPlayerId) {
     if (!ui) return;
@@ -143,19 +37,34 @@ export class SpaceClientMode extends BaseClientMode {
     const myP = (gameState.players || []).find(p => p.id === myPlayerId);
 
     // 1. Task Progress Bar
+    this.panels?.update(gameState,myPlayerId);
+    if (ui.hintAction) ui.hintAction.textContent = 'E / Boşluk: Görev • Q: Öldür • V: Vent';
+    if (ui.hintHold) ui.hintHold.textContent = 'R: Bildir • M: Harita • B: Sabotaj';
+    if(s.soloPractice&&s.gameState==='playing'&&ui.hintHold)ui.hintHold.textContent='ANTRENMAN • Görevler maç sonucu oluşturmaz.';
+    if (ui.hudChat) ui.hudChat.classList.toggle('hidden', s.gameState === 'playing');
+    if (ui.btnTouchAction) ui.btnTouchAction.textContent = myP?.role === 'impostor' ? '🔪 ÖLDÜR' : '⚙️ GÖREV';
+    if (ui.btnTouchHold) ui.btnTouchHold.classList.add('hidden');
+    if (ui.btnTouchVent) ui.btnTouchVent.classList.toggle('hidden', myP?.role !== 'impostor');
+    if (ui.btnTouchReport) ui.btnTouchReport.classList.remove('hidden');
+    for(const button of [ui.btnTouchAction,ui.btnTouchVent,ui.btnTouchReport]) if(button) button.disabled=s.gameState!=='playing';
+    if(s.gameState==='waiting') {
+      if(ui.hintAction) ui.hintAction.textContent='Lobi: Görevler ve yetenekler maç başlayınca açılır.';
+      ui.closeTaskMiniGame();
+    }
+    document.getElementById('btn-space-sabotage')?.classList.toggle('hidden', myP?.role !== 'impostor');
     if (ui.spaceTaskFill) {
-      const prog = s.taskProgress || 0;
+      const prog = s.taskProgressRatio || 0;
       ui.spaceTaskFill.style.width = `${Math.min(100, Math.max(0, prog))}%`;
     }
     if (ui.spaceTaskPercentage) {
-      ui.spaceTaskPercentage.textContent = `%${Math.round(s.taskProgress || 0)}`;
+      ui.spaceTaskPercentage.textContent = `%${Math.round(s.taskProgressRatio || 0)}`;
     }
 
     // 2. Role Card and Badge
     if (myP) {
       const isImpostor = myP.role === 'impostor';
       if (ui.spaceRoleBadge) {
-        ui.spaceRoleBadge.textContent = isImpostor ? '🔪 CASUS (IMPOSTOR)' : '🚀 MÜRETTEBAT (CREW)';
+        ui.spaceRoleBadge.textContent = s.gameState==='waiting' ? `LOBİ • ${s.playersMeta.length}/4 oyuncu (1 kişi: antrenman)` : s.soloPractice?'ANTRENMAN • MÜRETTEBAT':(isImpostor ? '🔪 CASUS (IMPOSTOR)' : '🚀 MÜRETTEBAT (CREW)');
         ui.spaceRoleBadge.className = isImpostor ? 'badge-role role-impostor' : 'badge-role role-crew';
       }
 
@@ -187,6 +96,9 @@ export class SpaceClientMode extends BaseClientMode {
 
     // 3. Meeting Modal Controller
     if (s.gameState === 'meeting') {
+      ui.closeTaskMiniGame();
+      if (ui.meetingTimerText) ui.meetingTimerText.textContent = `${s.meetingTimer}s`;
+      if (ui.skipVoteCount) ui.skipVoteCount.textContent = s.skipVotesCount || 0;
       if (ui.modalMeeting && ui.modalMeeting.classList.contains('hidden')) {
         ui.openMeetingModal(s, gameState.players || [], myPlayerId);
       }
@@ -199,5 +111,31 @@ export class SpaceClientMode extends BaseClientMode {
 
   renderMinimap(canvas, gameState, myPlayerId) {
     this.minimapRenderer.renderMinimap(canvas, gameState, myPlayerId);
+  }
+
+  checkTaskInteraction(app) {
+    const state = app.lastGameState;
+    const me = state?.players.find(p => p.id === app.socket.myPlayerId);
+    if (!me || me.isSpectator || me.role !== 'crew' || state.modeState.gameState !== 'playing' || !app.ui.modalTaskInteractive.classList.contains('hidden')) return;
+    const meta = state.modeState.playersMeta.find(p => p.id === me.id);
+    const task = state.modeState.taskStations.find(s => Math.hypot(me.x - s.x, me.y - s.y) < 80 && !meta.completedTasksList?.includes(s.id));
+    if (!task) return;
+    app.input.resetKeys();
+    app.ui.openTaskMiniGame(task, () => app.socket.sendAction({ type: 'complete_task', taskId: task.id }));
+    app.socket.sendAction({ type: 'start_task', taskId: task.id });
+  }
+
+  toggleMinimap(ui, state, myId) {
+    const modal = document.getElementById('modal-space-minimap');
+    modal.classList.toggle('hidden');
+    if (!modal.classList.contains('hidden')) {
+      const canvas = modal.querySelector('canvas');
+      if (canvas) this.renderMinimap(canvas, state, myId);
+    }
+  }
+
+  toggleSabotageModal(ui, state, myId) {
+    const me = state?.players.find(p => p.id === myId);
+    if (me?.role === 'impostor' && me.isAlive) document.getElementById('modal-space-sabotage').classList.toggle('hidden');
   }
 }

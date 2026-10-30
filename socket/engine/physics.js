@@ -62,7 +62,7 @@ export class PhysicsBody {
     this.pos = new Vec2(options.x || 0, options.y || 0);
     this.vel = new Vec2(options.vx || 0, options.vy || 0);
     this.radius = options.radius || 15;
-    this.mass = options.mass || 1;
+    this.mass = options.mass ?? 1;
     this.invMass = this.mass === 0 ? 0 : 1 / this.mass;
     this.damping = options.damping !== undefined ? options.damping : 0.96; // Surface friction
     this.restitution = options.restitution !== undefined ? options.restitution : 0.6; // Bounciness
@@ -70,11 +70,17 @@ export class PhysicsBody {
     this.type = options.type || 'disc'; // 'player', 'ball', 'post', 'pellet'
   }
 
+  get mass() { return this._mass; }
+  set mass(value) {
+    this._mass = Math.max(0, Number(value) || 0);
+    this.invMass = this._mass === 0 ? 0 : 1 / this._mass;
+  }
+
   update(dt = 1) {
     if (this.isStatic) return;
 
     // Normalize time delta to 60 FPS frame steps (so 60Hz dt=0.0166s gives step=1.0)
-    const step = dt ? (dt * 60) : 1;
+    const step = Math.max(0, dt * 60);
 
     // Apply velocity in pixels per frame step
     this.pos.x += this.vel.x * step;
@@ -104,10 +110,10 @@ export function resolveCircleCollision(a, b) {
   const dist = Math.hypot(dx, dy);
   const minDist = a.radius + b.radius;
 
-  if (dist < minDist && dist > 0.0001) {
+  if (dist < minDist) {
     // Normal vector
-    const nx = dx / dist;
-    const ny = dy / dist;
+    const nx = dist > 0.0001 ? dx / dist : 1;
+    const ny = dist > 0.0001 ? dy / dist : 0;
 
     // Overlap separation (push apart based on mass)
     const overlap = minDist - dist;
@@ -172,9 +178,9 @@ export function resolveSegmentCollision(body, p1, p2, restitution = 0.6) {
   const diffY = body.pos.y - closestY;
   const dist = Math.hypot(diffX, diffY);
 
-  if (dist < body.radius && dist > 0.0001) {
-    const nx = diffX / dist;
-    const ny = diffY / dist;
+  if (dist < body.radius) {
+    const nx = dist > 0.0001 ? diffX / dist : -dy / Math.sqrt(lenSq);
+    const ny = dist > 0.0001 ? diffY / dist : dx / Math.sqrt(lenSq);
 
     // Push body out of segment
     const overlap = body.radius - dist;

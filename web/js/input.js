@@ -25,6 +25,7 @@ export class InputController {
     };
 
     this.isChatting = false;
+    this.pendingKeys = new Map();
     this.setupListeners();
   }
 
@@ -52,6 +53,7 @@ export class InputController {
     // Keyboard Listeners
     window.addEventListener('keydown', (e) => {
       if (isFieldFocused()) {
+        this.resetKeys();
         this.isChatting = true;
         return;
       }
@@ -59,6 +61,7 @@ export class InputController {
 
       const code = e.code;
       const key = (e.key || '').toLowerCase();
+      if (code === 'KeyQ' && window.gameApp?.lastGameState?.mode === 'space') this.keys.kick = true;
 
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(code) || [' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
         e.preventDefault();
@@ -75,9 +78,12 @@ export class InputController {
       }
       if (code === 'KeyV' || key === 'v') this.keys.vent = true;
       if (code === 'KeyR' || key === 'r') this.keys.report = true;
+      // Preserve a short tap until the next network input sample.
+      for (const [name, pressed] of Object.entries(this.keys)) if (pressed && !this.pendingKeys.has(name)) this.pendingKeys.set(name, null);
     });
 
     window.addEventListener('keyup', (e) => {
+      if (e.code === 'KeyQ') this.keys.kick = false;
       const code = e.code;
       const key = (e.key || '').toLowerCase();
 
@@ -101,7 +107,7 @@ export class InputController {
 
     // Mouse Listeners
     window.addEventListener('mousedown', (e) => {
-      if (isFieldFocused() || e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+      if (isFieldFocused() || e.target.id !== 'game-canvas') return;
       if (e.button === 0) { // Left click = Kick
         this.keys.kick = true;
       } else if (e.button === 2) { // Right click = Hold Ball Skill
@@ -184,7 +190,9 @@ export class InputController {
     if (btnTouchAction) {
       btnTouchAction.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        this.keys.kick = true;
+        const app = window.gameApp;
+        const isCrew = app?.lastGameState?.mode === 'space' && app.lastGameState.players.find(p => p.id === app.socket.myPlayerId)?.role === 'crew';
+        if (isCrew) app.checkSpaceTaskInteraction(); else this.keys.kick = true;
       });
       btnTouchAction.addEventListener('touchend', (e) => {
         e.preventDefault();
@@ -209,6 +217,7 @@ export class InputController {
       btnTouchVent.addEventListener('touchstart', (e) => {
         e.preventDefault();
         this.keys.vent = true;
+        this.pendingKeys.set('vent', null);
       });
       btnTouchVent.addEventListener('touchend', (e) => {
         e.preventDefault();
@@ -220,15 +229,20 @@ export class InputController {
       btnTouchReport.addEventListener('touchstart', (e) => {
         e.preventDefault();
         this.keys.report = true;
+        this.pendingKeys.set('report', null);
       });
       btnTouchReport.addEventListener('touchend', (e) => {
         e.preventDefault();
         this.keys.report = false;
       });
     }
+    for (const button of [btnTouchAction, btnTouchHold, btnTouchVent, btnTouchReport]) {
+      button?.addEventListener('touchcancel', () => this.resetKeys());
+    }
   }
 
   resetKeys() {
+    this.pendingKeys.clear();
     this.keys.up = false;
     this.keys.down = false;
     this.keys.left = false;
@@ -252,17 +266,26 @@ export class InputController {
   }
 
   getState() {
+    if (this.isChatting) return Object.fromEntries(Object.keys(this.keys).map(key => [key, false]));
+    const keys = { ...this.keys };
+    const now = performance.now();
+    // Keep taps across several 60 Hz samples: consecutive packets may arrive in one server tick.
+    for (const [key, until] of this.pendingKeys) {
+      if (until === null) this.pendingKeys.set(key, now + 75);
+      if (until === null || now < until) keys[key] = true;
+      else this.pendingKeys.delete(key);
+    }
     const isDoingTask = document.getElementById('modal-task-interactive') && !document.getElementById('modal-task-interactive').classList.contains('hidden');
     return {
-      up: isDoingTask ? false : this.keys.up,
-      down: isDoingTask ? false : this.keys.down,
-      left: isDoingTask ? false : this.keys.left,
-      right: isDoingTask ? false : this.keys.right,
-      kick: this.keys.kick,
-      hold: this.keys.hold,
-      vent: this.keys.vent,
-      report: this.keys.report,
-      use: this.keys.use
+      up: isDoingTask ? false : keys.up,
+      down: isDoingTask ? false : keys.down,
+      left: isDoingTask ? false : keys.left,
+      right: isDoingTask ? false : keys.right,
+      kick: keys.kick,
+      hold: keys.hold,
+      vent: keys.vent,
+      report: keys.report,
+      use: keys.use
     };
   }
 }

@@ -1,6 +1,7 @@
 // puckClient.js - Frontend Client Module for Disk Football (Puck Mode)
 
 import { BaseClientMode } from './BaseClientMode.js';
+import { MatchResults } from '../ui/matchResults.js';
 
 export class PuckClientMode extends BaseClientMode {
   constructor() {
@@ -20,6 +21,8 @@ export class PuckClientMode extends BaseClientMode {
   }
 
   onActivate(roomData, ui) {
+    if(!this.results)this.results=new MatchResults('puck',document.querySelector('.hud-top-right'));
+    this.results.reset();
     if (ui.hudPuck) ui.hudPuck.classList.remove('hidden');
     if (ui.hudSumo) ui.hudSumo.classList.add('hidden');
     if (ui.hudAgar) ui.hudAgar.classList.add('hidden');
@@ -28,6 +31,7 @@ export class PuckClientMode extends BaseClientMode {
   }
 
   onDeactivate(ui) {
+    this.results?.reset();
     if (ui.hudPuck) ui.hudPuck.classList.add('hidden');
     if (ui.hudTeamSwitcher) ui.hudTeamSwitcher.classList.add('hidden');
     if (ui.hudSpectatorBanner) ui.hudSpectatorBanner.classList.add('hidden');
@@ -299,6 +303,7 @@ export class PuckClientMode extends BaseClientMode {
   }
 
   updateHUD(ui, gameState, myPlayerId) {
+    this.results?.update(gameState,myPlayerId);
     if (!ui) return;
 
     if (ui.hudPuck) ui.hudPuck.classList.remove('hidden');

@@ -221,6 +221,12 @@ export class VampireClientMode extends BaseClientMode {
       } else if (isTrial) {
         ui.vampirePhaseBadge.textContent = '⚖️ MAHKEME & İDAM';
         ui.vampirePhaseBadge.className = 'vampire-phase-pill phase-trial';
+      } else if (s.gameState === 'role_reveal') {
+        ui.vampirePhaseBadge.textContent = '🎭 ROLLER DAĞITILIYOR';
+        ui.vampirePhaseBadge.className = 'vampire-phase-pill phase-lobby';
+      } else if (s.gameState === 'trial_result') {
+        ui.vampirePhaseBadge.textContent = '⚖️ MAHKEME SONUCU';
+        ui.vampirePhaseBadge.className = 'vampire-phase-pill phase-trial';
       } else {
         ui.vampirePhaseBadge.textContent = '🏆 OYUN BİTTİ';
         ui.vampirePhaseBadge.className = 'vampire-phase-pill phase-gameover';
@@ -242,7 +248,7 @@ export class VampireClientMode extends BaseClientMode {
     }
 
     // Modal Control: Night Action Modal
-    if (isNight && isAlive && !isLobby && (myRole === 'vampire' || myRole === 'doctor' || myRole === 'seer')) {
+    if (isNight && isAlive && !myMeta?.hasActed && !isLobby && (myRole === 'vampire' || myRole === 'doctor' || myRole === 'seer')) {
       if (ui.modalVampireAction && ui.modalVampireAction.classList.contains('hidden')) {
         ui.openVampireNightModal(myRole, s.playersMeta || [], myPlayerId);
       }
@@ -253,7 +259,13 @@ export class VampireClientMode extends BaseClientMode {
     }
 
     // Modal Control: Trial Voting Modal
-    if (isTrial && isAlive && !isLobby) {
+    if (myMeta?.hunterRevengeAvailable) {
+      if (ui.modalVampireTrial?.classList.contains('hidden')) {
+        ui.openVampireTrialModal(s.playersMeta || [], myPlayerId, targetId => {
+          window.gameApp?.socket.sendAction({ type: 'hunter_revenge', targetId });
+        }, null);
+      }
+    } else if (isTrial && isAlive && !isLobby) {
       if (ui.modalVampireTrial && ui.modalVampireTrial.classList.contains('hidden')) {
         ui.openVampireTrialModal(s.playersMeta || [], myPlayerId);
       }

@@ -21,6 +21,8 @@ export class PuckMode extends BaseMode {
     
     // Match phases: 'waiting' (Isınma), 'first_half', 'half_time' (Devre arası), 'second_half', 'game_over'
     this.matchPhase = 'waiting';
+    this.result = null;
+    this.matchRoster = new Map();
     this.halfTimeTimer = 10;
     this.celebrationTimer = 0;
     this.lastScorer = null;
@@ -103,6 +105,7 @@ export class PuckMode extends BaseMode {
     player.lastKickTime = 0;
 
     this.spawnPlayer(player);
+    if (['first_half','half_time','second_half'].includes(this.matchPhase)) this.rememberPlayer(player);
   }
 
   canChangeTeam() {
@@ -129,12 +132,18 @@ export class PuckMode extends BaseMode {
 
     for (const player of this.room.players.values()) {
       if (!player.isSpectator) {
+        player.isHoldingBall = false;
+        player.isKicking = false;
         this.spawnPlayer(player);
       }
     }
   }
 
   startMatch(callerName = 'Host') {
+    this.cancelTimers();
+    this.result = null;
+    this.matchRoster.clear();
+    for (const p of this.room.players.values()) if (!p.isSpectator) this.rememberPlayer(p);
     this.matchPhase = 'first_half';
     this.scoreRed = 0;
     this.scoreBlue = 0;
@@ -152,20 +161,31 @@ export class PuckMode extends BaseMode {
   }
 
   stopMatch(callerName = 'Host') {
-    this.matchPhase = 'waiting';
-    this.timeRemaining = this.halfDuration;
-    this.scoreRed = 0;
-    this.scoreBlue = 0;
-    this.celebrationTimer = 0;
-    this.resetPositions();
+    if (!['first_half','half_time','second_half'].includes(this.matchPhase)) return;
+    this.finishMatch(`Maç ${callerName} tarafından bitirildi.`);
+  }
 
-    this.room.broadcastEvent({
-      type: 'match_stopped',
-      caller: callerName,
-      message: '⏹️ MAÇ BİTİRİLDİ (Isınma Modu)'
-    });
+  rememberPlayer(player) {
+    this.matchRoster.set(player.id, {id:player.id,name:player.name,team:player.team,color:player.color,avatar:player.avatar});
+  }
+
+  finishMatch(reason = 'Maç süresi tamamlandı.') {
+    if (this.matchPhase === 'game_over') return;
+    this.cancelTimers();
+    this.matchPhase = 'game_over';
+    this.celebrationTimer = 0;
+    const winner = this.scoreRed > this.scoreBlue ? 'red' : this.scoreBlue > this.scoreRed ? 'blue' : 'draw';
+    this.result = {
+      id: `${this.room.id}:${Date.now()}`, winner, reason, scoreRed:this.scoreRed, scoreBlue:this.scoreBlue,
+      players:[...this.matchRoster.values()].map(p=>({...p,
+        outcome:winner==='draw'?'draw':p.team===winner?'winner':'loser',
+        disconnected:!this.room.players.has(p.id),score:p.team==='red'?this.scoreRed:this.scoreBlue}))
+    };
+    this.ball.vel.set(0,0);
+    for (const p of this.room.players.values()) {p.vel.set(0,0);p.isHoldingBall=false;}
+    this.room.broadcastEvent({type:'game_over',winner,scoreRed:this.scoreRed,scoreBlue:this.scoreBlue,message:reason});
     this.room.broadcastEvent({ type: 'sfx_whistle' });
-    this.room.broadcastChat('Hakem', `⏹️ Maç ${callerName} tarafından bitirildi. Isınma modu aktif.`, '#f59e0b');
+    this.room.broadcastChat('Hakem', `${reason} Kırmızı ${this.scoreRed} – ${this.scoreBlue} Mavi`, '#38bdf8');
   }
 
   handleAction(playerId, actionData) {
@@ -187,6 +207,7 @@ export class PuckMode extends BaseMode {
   }
 
   update(dt, secTimerTick) {
+    if (this.matchPhase === 'game_over') return;
     if (secTimerTick) {
       if (this.matchPhase === 'first_half') {
         if (this.timeRemaining > 0) {
@@ -222,29 +243,8 @@ export class PuckMode extends BaseMode {
         if (this.timeRemaining > 0) {
           this.timeRemaining--;
         } else {
-          // Match Finished
-          this.matchPhase = 'game_over';
-          const winner = this.scoreRed > this.scoreBlue ? 'red' : (this.scoreBlue > this.scoreRed ? 'blue' : 'draw');
-          this.room.broadcastEvent({
-            type: 'game_over',
-            winner,
-            scoreRed: this.scoreRed,
-            scoreBlue: this.scoreBlue,
-            message: winner === 'draw' ? '🤝 MAÇ BİTTİ: BERABERE!' : `🏆 MAÇ BİTTİ: ${winner === 'red' ? 'KIRMIZI' : 'MAVİ'} TAKIM KAZANDI!`
-          });
-          this.room.broadcastEvent({ type: 'sfx_whistle' });
-          this.room.broadcastChat('Hakem', `🏆 Maç Sona Erdi! Skor: Kırmızı ${this.scoreRed} - ${this.scoreBlue} Mavi`, '#38bdf8');
-          
-          setTimeout(() => {
-            if (this.matchPhase === 'game_over') {
-              this.matchPhase = 'waiting';
-              this.timeRemaining = this.halfDuration;
-              this.scoreRed = 0;
-              this.scoreBlue = 0;
-              this.resetPositions();
-              this.room.broadcastChat('Hakem', '⚽ Yeni maç için hazırlık (Isınma modu).', '#94a3b8');
-            }
-          }, 8000);
+          this.finishMatch();
+          return;
         }
       }
     }
@@ -323,7 +323,7 @@ export class PuckMode extends BaseMode {
 
       if (p1.input && p1.input.hold && !p1.isHoldingBall) {
         const canHold = (p1.lastHoldEndTime === 0 || (now - p1.lastHoldEndTime >= (p1.holdCooldownMs || 5000)));
-        if (canHold && inBallReach) {
+        if (canHold && inBallReach && !playerList.some(p => p.id !== p1.id && p.isHoldingBall)) {
           p1.isHoldingBall = true;
           p1.holdStartTime = now;
           p1.holdAngle = Math.atan2(this.ball.pos.y - p1.pos.y, this.ball.pos.x - p1.pos.x);
@@ -551,7 +551,7 @@ export class PuckMode extends BaseMode {
 
   applyPlayerMovement(player, dt) {
     if (!player.input) return;
-    const accel = configDb.get('puck_player_accel') * (this.room.speedMultiplier || 1.0);
+    const accel = configDb.get('puck_player_accel') * (this.room.speedMultiplier || 1.0) * dt * 60;
     const maxSpeed = configDb.get('puck_player_max_speed') * (this.room.speedMultiplier || 1.0);
 
     let ax = 0;
@@ -634,6 +634,7 @@ export class PuckMode extends BaseMode {
       goalDepth: this.goalDepth,
       scoreRed: this.scoreRed,
       scoreBlue: this.scoreBlue,
+      result: this.result,
       timeRemaining: timeDisplay,
       matchPhase: this.matchPhase, // 'waiting', 'first_half', 'half_time', 'second_half', 'game_over'
       isMatchActive: this.matchPhase === 'first_half' || this.matchPhase === 'half_time' || this.matchPhase === 'second_half',

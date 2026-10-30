@@ -1,5 +1,6 @@
 import { PhysicsBody } from './physics.js';
 import { modeRegistry } from './modes/modeRegistry.js';
+import { cleanText, cleanColor, cleanInput, projectState } from '../security.js';
 
 export class Room {
   constructor(id, name, modeType = 'puck', options = {}) {
@@ -8,6 +9,7 @@ export class Room {
     this.modeType = modeType;
     this.options = typeof options === 'object' ? options : { maxPlayers: options };
     this.maxPlayers = typeof options === 'number' ? options : (options.maxPlayers || 8);
+    if(modeType==='space')this.maxPlayers=Math.min(15,this.maxPlayers);
     this.isPrivate = !!options.isPrivate;
     this.speedMultiplier = options.speedMultiplier || 1.0;
     this.matchDuration = options.matchDuration || 180;
@@ -24,7 +26,7 @@ export class Room {
 
     // 60 Hz Physics & Broadcast Loop
     this.physicsInterval = 1000 / 60;
-    this.broadcastInterval = 1000 / 60; // Full 60Hz broadcast for ultra-smooth sync
+    this.broadcastInterval = 1000 / 20; // Client interpolation keeps rendering smooth while bounding bandwidth.
     this.lastTickTime = Date.now();
     this.lastBroadcastTime = Date.now();
     this.secondAccumulator = 0;
@@ -33,6 +35,7 @@ export class Room {
   }
 
   initGameMode(modeType) {
+    this.mode?.destroy();
     this.modeType = modeType;
     this.mode = modeRegistry.createMode(modeType, this, this.options);
   }
@@ -50,6 +53,7 @@ export class Room {
   }
 
   addPlayer(id, name, color, avatar, ws) {
+    if (this.players.size >= this.maxPlayers || this.players.has(id)) return null;
     const player = new PhysicsBody({
       id,
       x: 0,
@@ -61,9 +65,9 @@ export class Room {
       type: 'player'
     });
 
-    player.name = (name || 'Player').substring(0, 16);
-    player.color = color || '#3b82f6';
-    player.avatar = avatar || '⚽';
+    player.name = cleanText(name, 16, 'Oyuncu');
+    player.color = cleanColor(color);
+    player.avatar = cleanText(avatar, 8, '⚽');
     player.ws = ws;
     player.input = { up: false, down: false, left: false, right: false, kick: false, hold: false };
     player.ping = 0;
@@ -95,6 +99,7 @@ export class Room {
     const player = this.players.get(id);
     if (player) {
       this.players.delete(id);
+      this.mode.onPlayerLeave(player);
       this.restartVotes.delete(id);
 
       // Reassign host if host left
@@ -109,13 +114,19 @@ export class Room {
       }
 
       this.broadcastChat('Sistem', `${player.name} odadan ayrıldı.`, '#ef4444');
+      if (this.players.size === 0) {
+        this.initGameMode(this.modeType);
+        this.restartVotes.clear();
+        this.eventQueue = [];
+      }
     }
   }
 
   handlePlayerInput(id, inputData) {
     const player = this.players.get(id);
     if (player) {
-      player.input = inputData;
+      player.input = cleanInput(inputData);
+      player.lastInputAt = Date.now();
     }
   }
 
@@ -142,6 +153,9 @@ export class Room {
     }
 
     if (actionType === 'vote_restart' || actionType === 'vote_start') {
+      if (player.isSpectator || player.isAlive === false) return;
+      const phase = this.mode.gameState || this.mode.matchPhase || this.mode.roundState;
+      if (!['waiting', 'game_over', 'round_over'].includes(phase)) return;
       if (this.restartVotes.has(id)) {
         this.restartVotes.delete(id);
       } else {
@@ -168,6 +182,7 @@ export class Room {
   }
 
   handleTeamChange(id, newTeam) {
+    if (this.modeType !== 'puck') return;
     const player = this.players.get(id);
     if (!player || !(newTeam === 'red' || newTeam === 'blue' || newTeam === 'spec')) return;
 
@@ -212,7 +227,7 @@ export class Room {
   }
 
   broadcastEvent(event) {
-    this.eventQueue.push(event);
+    if (this.eventQueue.length < 512) this.eventQueue.push(event);
   }
 
   broadcastChat(sender, message, color = '#ffffff') {
@@ -230,23 +245,24 @@ export class Room {
   sendToAll(data) {
     const payload = JSON.stringify(data);
     for (const player of this.players.values()) {
-      if (player.ws && player.ws.readyState === 1) { // OPEN
+      if (player.ws && player.ws.readyState === 1 && player.ws.bufferedAmount < 1024 * 1024) {
         player.ws.send(payload);
       }
     }
   }
 
   sendToPlayer(playerId, data) {
-    const player = this.players.get(playerId);
-    if (player && player.ws && player.ws.readyState === 1) { // OPEN
-      player.ws.send(JSON.stringify(data));
-    }
+    if (this.players.has(playerId)) this.eventQueue.push({ ...data, recipientId: playerId });
   }
 
   tick() {
+    if (this.players.size === 0) { this.lastTickTime = Date.now(); this.eventQueue = []; return; }
     const now = Date.now();
     const dt = Math.min((now - this.lastTickTime) / 1000, 0.1);
     this.lastTickTime = now;
+    for (const player of this.players.values()) {
+      if (now - (player.lastInputAt || 0) > 1000) player.input = cleanInput(null);
+    }
 
     // 1-second interval flag for game timers
     this.secondAccumulator += dt;
@@ -302,7 +318,8 @@ export class Room {
         isKicking: !!p.isKicking,
         isHoldingBall: !!p.isHoldingBall,
         holdCdRatio: Math.round(holdCdRatio * 100) / 100,
-        ping: p.ping || 0
+        ping: p.ping || 0,
+        killCooldown: this.modeType === 'space' ? Math.max(0, (p.killCooldown || 18) - (now - (p.lastKillTime || 0)) / 1000) : undefined
       });
     }
 
@@ -313,7 +330,7 @@ export class Room {
       mode: this.modeType,
       hostId: this.hostId,
       restartVotesCount: this.restartVotes.size,
-      restartVotesNeeded: Math.max(1, Math.ceil(this.players.size * 0.6)),
+      restartVotesNeeded: Math.max(1, Math.ceil(this.players.size * 0.5)),
       hasVotedRestart: false, // populated per player or checked on client
       tackleEnabled: this.tackleEnabled,
       players: playersData,
@@ -321,7 +338,11 @@ export class Room {
       events: this.eventQueue
     };
 
-    this.sendToAll(statePacket);
+    for (const player of this.players.values()) {
+      if (player.ws?.readyState === 1 && player.ws.bufferedAmount < 1024 * 1024) {
+        player.ws.send(JSON.stringify(projectState(statePacket, player, this)));
+      }
+    }
     this.eventQueue = []; // Clear processed events
   }
 
@@ -343,6 +364,8 @@ export class Room {
   }
 
   destroy() {
+    this.mode?.destroy();
+    this.eventQueue = [];
     if (this.timer) {
       clearInterval(this.timer);
     }

@@ -53,6 +53,7 @@ export class ConquestClientMode extends BaseClientMode {
   destroyCityLabels() {
     if (this.cityLabelsContainer && this.cityLabelsContainer.parent) {
       this.cityLabelsContainer.parent.removeChild(this.cityLabelsContainer);
+      this.cityLabelsContainer.destroy({ children: true });
     }
     this.cityLabelsMap.clear();
     this.cityLabelsContainer = null;
@@ -424,6 +425,7 @@ export class ConquestClientMode extends BaseClientMode {
     if (!ui) return;
     this.myPlayerId = myPlayerId;
     const s = gameState.modeState || {};
+    this.lastModeState = s;
     const myPlayer = (gameState.players || []).find(p => p.id === myPlayerId);
     const territories = s.territories || [];
 

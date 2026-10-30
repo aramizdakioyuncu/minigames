@@ -1,197 +1,158 @@
-// tasksMiniGames.js - Interactive Mini-Game Modals for Space Crew Tasks
-
 export class TasksMiniGamesController {
   constructor(ui) {
     this.ui = ui;
+    this.timers = new Set();
     this.activeTaskStation = null;
-    this.wiresState = { wires: [], selectedLeft: null, completedPairs: 0 };
-    this.shieldsState = { tiles: [], required: 0, current: 0 };
   }
 
-  openTask(station, onCompleteCallback) {
-    if (!this.ui.modalTaskInteractive || !station) return;
+  later(callback, delay) {
+    const timer = setTimeout(() => { this.timers.delete(timer); callback(); }, delay);
+    this.timers.add(timer);
+  }
+
+  openTask(station, onComplete) {
+    this.closeTask();
     this.activeTaskStation = station;
-
-    if (this.ui.taskMiniIcon) this.ui.taskMiniIcon.textContent = station.icon || '⚡';
-    if (this.ui.taskMiniTitle) this.ui.taskMiniTitle.textContent = station.name || 'Görev';
-
-    Object.values(this.ui.taskPanels).forEach(panel => {
-      if (panel) panel.classList.add('hidden');
-    });
-
-    if (station.id === 'task_wires_elec') {
-      if (this.ui.taskPanels.wires) this.ui.taskPanels.wires.classList.remove('hidden');
-      this.initWiringTask(onCompleteCallback);
-    } else if (station.id === 'task_shields_sec') {
-      if (this.ui.taskPanels.shields) this.ui.taskPanels.shields.classList.remove('hidden');
-      this.initShieldsTask(onCompleteCallback);
-    } else if (station.id === 'task_scan_medbay') {
-      if (this.ui.taskPanels.medscan) this.ui.taskPanels.medscan.classList.remove('hidden');
-      this.initMedScanTask(onCompleteCallback);
-    } else if (station.id === 'task_trash_cafe') {
-      if (this.ui.taskPanels.trash) this.ui.taskPanels.trash.classList.remove('hidden');
-      this.initTrashTask(onCompleteCallback);
-    } else {
-      if (this.ui.taskPanels.wiring) this.ui.taskPanels.wiring.classList.remove('hidden');
-      this.initWiringTask(onCompleteCallback);
+    this.startedAt = performance.now();
+    this.finishing = false;
+    this.ui.taskMiniIcon.textContent = station.icon || '⚡';
+    this.ui.taskMiniTitle.textContent = station.name;
+    const id = station.id;
+    const kind = /scan|med|bio/.test(id) ? 'medscan' : /shield/.test(id) ? 'shields' :
+      /trash|filter|clean|fuel/.test(id) ? 'trash' : /react|engine|align/.test(id) ? 'reactor' :
+      /steer|download|nav|route/.test(id) ? 'steer' : 'wires';
+    Object.entries(this.ui.taskPanels).forEach(([name, panel]) => panel?.classList.toggle('hidden', name !== kind));
+    const finish = () => {
+      if (this.finishing || this.activeTaskStation !== station) return;
+      this.finishing = true;
+      this.ui.taskMiniTitle.textContent = 'İşlem doğrulanıyor…';
+      const remaining = station.duration * 1000 - (performance.now() - this.startedAt) + 200;
+      this.later(() => {
+        if (this.activeTaskStation !== station) return;
+        onComplete?.(station);
+        this.closeTask();
+      }, Math.max(400, remaining));
+    };
+    if (kind === 'wires') this.wires(finish);
+    if (kind === 'shields') {
+      const grid = document.getElementById('shields-grid');
+      grid.replaceChildren();
+      let count = 0;
+      for (let i = 0; i < 7; i++) {
+        const button = document.createElement('button');
+        button.className = 'shield-hex damaged';
+        button.textContent = String(i + 1);
+        button.onclick = () => { button.disabled = true; button.className = 'shield-hex active'; if (++count === 7) finish(); };
+        grid.appendChild(button);
+      }
     }
-
+    if (kind === 'medscan') {
+      const tick = () => {
+        const progress = Math.min(100, (performance.now() - this.startedAt) / (station.duration * 10));
+        document.getElementById('medscan-bar-fill').style.width = `${progress}%`;
+        document.getElementById('medscan-status-text').textContent = `Tarama: %${Math.floor(progress)}`;
+        if (progress >= 100) finish(); else this.later(tick, 100);
+      };
+      tick();
+    }
+    if (kind === 'trash') {
+      const button = document.getElementById('btn-pull-trash');
+      button.disabled = false;
+      button.onclick = () => { button.disabled = true; finish(); };
+      document.getElementById('trash-lever-handle').onclick = button.onclick;
+    }
+    if (kind === 'reactor') {
+      const grid = document.getElementById('reactor-pad-grid');
+      grid.replaceChildren();
+      let next = 1;
+      document.getElementById('reactor-seq-display').textContent = 'Sıra: 1 → 2 → 3 → 4 → 5';
+      for (const number of [3, 1, 5, 2, 4]) {
+        const button = document.createElement('button');
+        button.className = 'btn btn-primary';
+        button.textContent = number;
+        button.onclick = () => { if (number === next) { button.disabled = true; if (++next === 6) finish(); } };
+        grid.appendChild(button);
+      }
+    }
+    if (kind === 'steer') {
+      document.getElementById('radar-status').textContent = 'Hedefe tıkla';
+      document.getElementById('radar-ship-target').onclick = () => {
+        document.getElementById('radar-status').textContent = 'Rota kilitlendi'; finish();
+      };
+    }
     this.ui.modalTaskInteractive.classList.remove('hidden');
   }
 
-  closeTask() {
-    if (this.ui.modalTaskInteractive) {
-      this.ui.modalTaskInteractive.classList.add('hidden');
-    }
-    this.activeTaskStation = null;
-  }
-
-  initWiringTask(onCompleteCallback) {
-    const leftCol = document.getElementById('wires-col-left');
-    const rightCol = document.getElementById('wires-col-right');
-    const statusText = document.getElementById('wires-status');
-    if (!leftCol || !rightCol) return;
-
-    leftCol.innerHTML = '';
-    rightCol.innerHTML = '';
-    if (statusText) statusText.textContent = 'Kabloları eşleştir (0/4)';
-
-    const colors = [
-      { id: 'red', name: 'Kırmızı', hex: '#ef4444' },
-      { id: 'blue', name: 'Mavi', hex: '#3b82f6' },
-      { id: 'yellow', name: 'Sarı', hex: '#eab308' },
-      { id: 'pink', name: 'Pembe', hex: '#ec4899' }
-    ];
-
-    const shuffledLeft = [...colors].sort(() => Math.random() - 0.5);
-    const shuffledRight = [...colors].sort(() => Math.random() - 0.5);
-
-    this.wiresState = { selectedLeft: null, completedPairs: 0 };
-
-    shuffledLeft.forEach(col => {
-      const btn = document.createElement('button');
-      btn.className = 'wire-node node-left';
-      btn.dataset.color = col.id;
-      btn.style.setProperty('--wire-c', col.hex);
-      btn.innerHTML = `<span class="wire-connector"></span><span class="wire-label">${col.name}</span>`;
-      btn.addEventListener('click', () => {
-        if (btn.classList.contains('connected')) return;
-        leftCol.querySelectorAll('.wire-node').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.wiresState.selectedLeft = col.id;
-      });
-      leftCol.appendChild(btn);
-    });
-
-    shuffledRight.forEach(col => {
-      const btn = document.createElement('button');
-      btn.className = 'wire-node node-right';
-      btn.dataset.color = col.id;
-      btn.style.setProperty('--wire-c', col.hex);
-      btn.innerHTML = `<span class="wire-label">${col.name}</span><span class="wire-connector"></span>`;
-      btn.addEventListener('click', () => {
-        if (btn.classList.contains('connected') || !this.wiresState.selectedLeft) return;
-        if (this.wiresState.selectedLeft === col.id) {
-          btn.classList.add('connected');
-          const leftNode = leftCol.querySelector(`[data-color="${col.id}"]`);
-          if (leftNode) {
-            leftNode.classList.remove('active');
-            leftNode.classList.add('connected');
-          }
-          this.wiresState.selectedLeft = null;
-          this.wiresState.completedPairs++;
-          if (statusText) statusText.textContent = `Kabloları eşleştir (${this.wiresState.completedPairs}/4)`;
-
-          if (this.wiresState.completedPairs >= 4) {
-            if (statusText) statusText.innerHTML = '⚡ <b>GÖREV TAMAMLANDI!</b>';
-            setTimeout(() => {
-              this.closeTask();
-              if (onCompleteCallback) onCompleteCallback(this.activeTaskStation);
-            }, 600);
-          }
-        } else {
-          btn.classList.add('shake-error');
-          setTimeout(() => btn.classList.remove('shake-error'), 400);
-        }
-      });
-      rightCol.appendChild(btn);
-    });
-  }
-
-  initShieldsTask(onCompleteCallback) {
-    const grid = document.getElementById('shields-hex-grid');
-    const statusText = document.getElementById('shields-status');
-    if (!grid) return;
-    grid.innerHTML = '';
-
-    const hexCount = 7;
-    let activeHexes = 0;
-
-    for (let i = 0; i < hexCount; i++) {
-      const hex = document.createElement('div');
-      const isDamaged = Math.random() > 0.4;
-      hex.className = `shields-hex ${isDamaged ? 'damaged' : 'active'}`;
-      if (!isDamaged) activeHexes++;
-
-      hex.addEventListener('click', () => {
-        if (hex.classList.contains('damaged')) {
-          hex.classList.remove('damaged');
-          hex.classList.add('active');
-          activeHexes++;
-          if (statusText) statusText.textContent = `Kalkan Gücü: %${Math.round((activeHexes / hexCount) * 100)}`;
-          if (activeHexes >= hexCount) {
-            if (statusText) statusText.innerHTML = '🛡️ <b>KALKANLAR MAKSİMUM GÜÇTE!</b>';
-            setTimeout(() => {
-              this.closeTask();
-              if (onCompleteCallback) onCompleteCallback(this.activeTaskStation);
-            }, 600);
-          }
-        }
-      });
-      grid.appendChild(hex);
-    }
-  }
-
-  initMedScanTask(onCompleteCallback) {
-    const scanBar = document.getElementById('medscan-progress-bar');
-    const scanStatus = document.getElementById('medscan-status');
-    if (!scanBar || !scanStatus) return;
-
-    scanBar.style.width = '0%';
-    scanStatus.textContent = 'Biyometrik tarama yapılıyor... (0%)';
-    let progress = 0;
-
-    const interval = setInterval(() => {
-      progress += 5;
-      scanBar.style.width = `${progress}%`;
-      scanStatus.textContent = `Biyometrik tarama yapılıyor... (%${progress})`;
-
-      if (progress >= 100) {
-        clearInterval(interval);
-        scanStatus.innerHTML = '🔬 <b>TARAMA TEMİZ! (MÜRETTEBAT ONAYLANDI)</b>';
-        setTimeout(() => {
-          this.closeTask();
-          if (onCompleteCallback) onCompleteCallback(this.activeTaskStation);
-        }, 700);
+  wires(finish) {
+    const left = document.getElementById('wire-left-col');
+    const right = document.getElementById('wire-right-col');
+    const box=document.getElementById('wiring-game-box'),svg=document.getElementById('wire-svg');
+    svg.replaceChildren();
+    left.replaceChildren(); right.replaceChildren();
+    const colors = [['red', '#ef4444', 'Kırmızı'], ['blue', '#3b82f6', 'Mavi'], ['yellow', '#eab308', 'Sarı'], ['pink', '#ec4899', 'Pembe']];
+    let selected = null;
+    let drag=null;
+    const connected=new Set();
+    const point=(button,side)=>{const a=button.getBoundingClientRect(),b=box.getBoundingClientRect();return {x:(side==='left'?a.right:a.left)-b.left,y:a.top+a.height/2-b.top};};
+    const draw=()=>{
+      svg.replaceChildren();
+      for(const [id,color] of colors) {
+        if(!connected.has(id)&&drag?.color!==id)continue;
+        const from=point(left.querySelector(`[data-color="${id}"]`),'left');
+        const to=connected.has(id)?point(right.querySelector(`[data-color="${id}"]`),'right'):drag;
+        const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+        const mid=(from.x+to.x)/2;
+        path.setAttribute('d',`M ${from.x} ${from.y} C ${mid} ${from.y}, ${mid} ${to.y}, ${to.x} ${to.y}`);
+        path.setAttribute('stroke',color);path.setAttribute('stroke-width','7');path.setAttribute('fill','none');path.setAttribute('stroke-linecap','round');
+        path.dataset.wire=id;path.classList.toggle('wire-preview',!connected.has(id));svg.appendChild(path);
       }
-    }, 150);
+    };
+    const select=id=>{selected=id;left.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.color===id));};
+    const connect=id=>{
+      if(selected!==id||connected.has(id))return;
+      connected.add(id);
+      for(const column of [left,right]){const button=column.querySelector(`[data-color="${id}"]`);button.disabled=true;button.classList.add('connected');button.classList.remove('active');}
+      selected=null;drag=null;draw();
+      if(connected.size===4)finish();
+    };
+    const order=[...colors];for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+    for (const [column, list] of [[left, colors], [right, order]]) {
+      for (const [id, color, name] of list) {
+        const button = document.createElement('button');
+        button.className = 'wire-node';
+        button.dataset.color = id;
+        button.style.setProperty('--wire-c', color);
+        button.textContent = name;
+        button.setAttribute('aria-label', `${column === left ? 'Sol' : 'Sağ'} ${name} kablo`);
+        button.onclick = () => {
+          if(column===left)select(id);else connect(id);
+        };
+        if(column===left)button.onpointerdown=event=>{
+          if(event.button!==0||button.disabled)return;
+          event.preventDefault();select(id);const b=box.getBoundingClientRect();
+          drag={color:id,x:event.clientX-b.left,y:event.clientY-b.top};box.setPointerCapture(event.pointerId);draw();
+        };
+        column.appendChild(button);
+      }
+    }
+    box.onpointermove=event=>{if(!drag)return;const b=box.getBoundingClientRect();drag.x=event.clientX-b.left;drag.y=event.clientY-b.top;draw();};
+    box.onpointerup=event=>{
+      if(!drag)return;
+      const target=document.elementFromPoint(event.clientX,event.clientY)?.closest('#wire-right-col button');
+      if(target&&!target.disabled)connect(target.dataset.color);
+      drag=null;draw();if(box.hasPointerCapture(event.pointerId))box.releasePointerCapture(event.pointerId);
+    };
+    box.onpointercancel=()=>{drag=null;select(null);draw();};
+    const resize=new ResizeObserver(draw);resize.observe(box);
+    this.wireCleanup=()=>{resize.disconnect();box.onpointermove=box.onpointerup=box.onpointercancel=null;svg.replaceChildren();};
   }
 
-  initTrashTask(onCompleteCallback) {
-    const btnLever = document.getElementById('btn-trash-lever');
-    const trashStatus = document.getElementById('trash-status');
-    if (!btnLever) return;
-
-    btnLever.disabled = false;
-    if (trashStatus) trashStatus.textContent = 'Kolu aşağı çekerek atıkları boşalt';
-
-    btnLever.onclick = () => {
-      btnLever.disabled = true;
-      if (trashStatus) trashStatus.innerHTML = '♻️ <b>ATIKLAR UZAYA FIRLATILIYOR...</b>';
-      setTimeout(() => {
-        this.closeTask();
-        if (onCompleteCallback) onCompleteCallback(this.activeTaskStation);
-      }, 900);
-    };
+  closeTask() {
+    this.wireCleanup?.();this.wireCleanup=null;
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers.clear();
+    if (this.activeTaskStation) this.ui.onTaskClosedCallback?.();
+    this.activeTaskStation = null;
+    this.ui.modalTaskInteractive?.classList.add('hidden');
   }
 }

@@ -122,7 +122,7 @@ export class AgarClientMode extends BaseClientMode {
     if (ui.hudTeamSwitcher) ui.hudTeamSwitcher.classList.add('hidden');
 
     if (ui.hintAction) ui.hintAction.innerHTML = '✂️ <b>Boşluk / Sol Tık:</b> İkiye Bölün (Split)';
-    if (ui.hintHold) ui.hintHold.innerHTML = '🍇 <b>E / W / Sağ Tık:</b> Yem At (Feed)';
+    if (ui.hintHold) ui.hintHold.innerHTML = '🍇 <b>E / F / Sağ Tık:</b> Yem At (Feed)';
     if (ui.btnTouchAction) ui.btnTouchAction.textContent = '✂️ BÖLÜN';
     if (ui.btnTouchHold) {
       ui.btnTouchHold.textContent = '🍇 YEM AT';

@@ -47,6 +47,7 @@ export class GameRenderer {
       antialias: true,
       powerPreference: 'high-performance'
     });
+    this.app.ticker.maxFPS = 60;
 
     // Layer Container Hierarchy
     this.stage = this.app.stage;
@@ -96,6 +97,7 @@ export class GameRenderer {
         for (const [id, textObj] of this.textPool.entries()) {
           if (this.entitiesTextContainer) {
             this.entitiesTextContainer.removeChild(textObj);
+            textObj.destroy();
           }
         }
         this.textPool.clear();
@@ -496,6 +498,10 @@ export class GameRenderer {
   renderWebGLEntities(gameState, myPlayerId) {
     const g = this.entitiesGraphics;
     g.clear();
+    if(gameState.mode==='space') {
+      for(const text of this.textPool.values()) text.visible=false;
+      return;
+    }
 
     const isAgar = gameState.mode === 'agar' && gameState.modeState && gameState.modeState.cells;
     const entities = isAgar
@@ -503,13 +509,6 @@ export class GameRenderer {
       : (gameState.players || []);
 
     const activeIds = new Set();
-    const myP = (gameState.players || []).find(p => p.id === myPlayerId);
-    const isSpaceMode = gameState.mode === 'space';
-    const isSpaceMeeting = isSpaceMode && gameState.modeState && gameState.modeState.gameState === 'meeting';
-    const isSpaceLobby = isSpaceMode && gameState.modeState && gameState.modeState.gameState === 'waiting';
-    const isImpostor = myP && myP.role === 'impostor';
-    const isMeDead = myP && !myP.isAlive;
-    const spaceVisionRadius = (isMeDead || isSpaceMeeting) ? 2200 : (isSpaceLobby ? 440 : (isImpostor ? 370 : 290));
 
     // In Agar mode, draw merging bridges between touching cells of the same player
     if (isAgar && entities.length > 1) {
@@ -546,16 +545,6 @@ export class GameRenderer {
       const isMe = p.id === myPlayerId || p.playerId === myPlayerId;
       const isVented = !!p.isVented;
       if (isVented && !isMe) continue;
-
-      // Fog of War Visibility Filter in Space Mode
-      if (isSpaceMode && !isSpaceMeeting && !isMeDead && !isMe && myP) {
-        const distToMe = Math.hypot(cached.x - myP.x, cached.y - myP.y);
-        if (distToMe > spaceVisionRadius + 35) {
-          const t = this.textPool.get(p.id);
-          if (t) t.visible = false;
-          continue; // Hidden in space darkness
-        }
-      }
 
       // Base radius with animated scale bounce and spawn animation
       let radius = isSpectator ? 16 : (cached.r || p.r || 18);
@@ -707,6 +696,7 @@ export class GameRenderer {
       if (!activeIds.has(id)) {
         textObj.visible = false;
         this.entitiesTextContainer.removeChild(textObj);
+        textObj.destroy();
         this.textPool.delete(id);
       }
     }
@@ -796,6 +786,11 @@ export class GameRenderer {
     ctx.scale(this.camera.zoom, this.camera.zoom);
     ctx.translate(-this.camera.x, -this.camera.y);
 
+    if(gameState.mode==='space') {
+      clientModeRegistry.getActiveMode('space').renderCanvas(this,ctx,gameState,myPlayerId);
+      ctx.restore();ctx.restore();return;
+    }
+
     if (gameState.mode === 'puck') {
       this.renderCanvasPuckPitch(ctx, gameState.modeState);
     } else if (gameState.mode === 'sumo') {
@@ -804,15 +799,33 @@ export class GameRenderer {
       this.renderCanvasAgarArena(ctx, gameState.modeState);
     } else if (gameState.mode === 'space') {
       this.renderCanvasSpaceShip(ctx, gameState.modeState);
+    } else if (gameState.mode === 'vampire') {
+      this.renderCanvasSpaceShip(ctx, gameState.modeState);
+      for (const landmark of gameState.modeState.landmarks || []) {
+        ctx.fillStyle = '#cbd5e1'; ctx.font = '16px sans-serif';
+        ctx.fillText(`${landmark.icon} ${landmark.name}`, landmark.x - 60, landmark.y);
+      }
+    } else if (gameState.mode === 'conquest') {
+      const mode = gameState.modeState;
+      ctx.fillStyle = '#122035'; ctx.fillRect(-mode.width / 2, -mode.height / 2, mode.width, mode.height);
+      for (const territory of mode.territories || []) {
+        ctx.beginPath(); ctx.arc(territory.x, territory.y, 28, 0, Math.PI * 2);
+        ctx.fillStyle = territory.color; ctx.fill();
+        ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(territory.name, territory.x, territory.y - 36);
+        ctx.fillText(String(territory.points), territory.x, territory.y + 5);
+      }
     }
 
     this.renderCanvasParticles(ctx, dt);
 
-    if (gameState.players) {
-      for (const p of gameState.players) {
-        if (!p.isSpectator && p.isAlive !== false) {
+    if (gameState.players && gameState.mode !== 'conquest') {
+      const entities = gameState.mode === 'agar' ? gameState.modeState.cells : gameState.players;
+      for (const p of entities || []) {
+        if (!p.isVented && (p.isAlive !== false || p.id === myPlayerId)) {
           const cached = this.entities.get(p.id) || p;
-          this.renderCanvasPlayer(ctx, { ...p, x: cached.x, y: cached.y }, p.id === myPlayerId);
+          this.renderCanvasPlayer(ctx, { ...p, x: cached.x, y: cached.y }, (p.playerId || p.id) === myPlayerId);
         }
       }
     }
@@ -918,6 +931,16 @@ export class GameRenderer {
         ctx.lineTo(wall.p2.x, wall.p2.y);
         ctx.stroke();
       }
+    }
+    ctx.font = '18px sans-serif'; ctx.textAlign = 'center';
+    for (const station of modeState.taskStations || []) {
+      ctx.fillStyle = '#facc15'; ctx.fillText(station.icon || '⚙️', station.x, station.y);
+    }
+    for (const body of modeState.bodies || []) {
+      ctx.fillStyle = '#ef4444'; ctx.fillText('💀', body.x, body.y);
+    }
+    for (const vent of modeState.vents || []) {
+      ctx.fillStyle = '#475569'; ctx.fillRect(vent.x - 15, vent.y - 10, 30, 20);
     }
   }
 

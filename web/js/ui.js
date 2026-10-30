@@ -150,6 +150,9 @@ export class UIController {
     this.vampireRoleTeam = document.getElementById('vampire-team-list');
     this.vampireRoleDesc = document.getElementById('vampire-reveal-desc');
     this.modalVampireNight = document.getElementById('modal-vampire-action');
+    this.modalVampireRole = this.modalVampireRoleReveal;
+    this.modalVampireAction = this.modalVampireNight;
+    this.modalVampireTrial = document.getElementById('modal-vampire-trial');
     this.vampireNightActionTitle = document.getElementById('vampire-action-title');
     this.vampireNightTargetList = document.getElementById('vampire-action-grid');
 
@@ -195,6 +198,11 @@ export class UIController {
   }
 
   showView(viewId) {
+    if (viewId !== 'view-game') {
+      this.closeTaskMiniGame();
+      document.querySelectorAll('#view-game .modal-overlay').forEach(el => el.classList.add('hidden'));
+      clientModeRegistry.getActiveMode()?.onDeactivate?.(this);
+    }
     [this.viewProfile, this.viewLobby, this.viewGame].forEach(v => {
       if (v) {
         v.classList.toggle('active', v.id === viewId);
@@ -300,6 +308,15 @@ export class UIController {
         <p>${mode.description}</p>
       `;
       this.modesCarousel.appendChild(card);
+      card.tabIndex = 0;
+      card.setAttribute('role', 'button');
+      const selectMode = () => {
+        this.activeFilter = mode.id;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.filter === mode.id));
+        window.gameApp?.socket.send({ type: 'get_rooms' });
+      };
+      card.addEventListener('click', selectMode);
+      card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectMode(); } });
     });
   }
 
@@ -332,10 +349,8 @@ export class UIController {
 
   prepareGameHUD(mode, roomData) {
     if (!mode) return;
-    const activeMode = clientModeRegistry.getActiveMode(mode);
-    if (activeMode && typeof activeMode.onActivate === 'function') {
-      activeMode.onActivate(roomData, this);
-    }
+    for (const element of [this.btnTouchVent, this.btnTouchReport]) element?.classList.add('hidden');
+    clientModeRegistry.activate(mode, roomData, this);
   }
 
   updateHUD(gameState, myPlayerId) {
@@ -352,6 +367,7 @@ export class UIController {
     msg.className = 'chat-msg';
     msg.innerHTML = `<span class="sender" style="color: ${color}">${this.escapeHtml(sender)}:</span> <span class="text">${this.escapeHtml(text)}</span>`;
     this.chatMessages.appendChild(msg);
+    while (this.chatMessages.children.length > 100) this.chatMessages.firstChild.remove();
     this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
   }
 
@@ -361,6 +377,30 @@ export class UIController {
       this.modalEscMenu.classList.toggle('hidden', !show);
     } else {
       this.modalEscMenu.classList.toggle('hidden');
+    }
+  }
+
+  addMeetingChatMessage(sender, text, color = '#ffffff') {
+    if (!this.meetingChatMessages) return;
+    const message = document.createElement('div');
+    message.className = 'chat-msg';
+    const label = document.createElement('span');
+    label.style.color = color;
+    label.textContent = `${sender}: `;
+    message.append(label, document.createTextNode(text));
+    this.meetingChatMessages.appendChild(message);
+    while (this.meetingChatMessages.children.length > 100) this.meetingChatMessages.firstChild.remove();
+    this.meetingChatMessages.scrollTop = this.meetingChatMessages.scrollHeight;
+  }
+
+  renderLeaderboard(players, myId) {
+    if (!this.leaderboardList) return;
+    this.leaderboardList.replaceChildren();
+    for (const [index, player] of players.slice(0, 10).entries()) {
+      const row = document.createElement('div');
+      row.className = 'leaderboard-item' + (player.id === myId ? ' is-me' : '');
+      row.textContent = `${index + 1}. ${player.avatar || '👤'} ${player.name} — ${player.score || 0}`;
+      this.leaderboardList.appendChild(row);
     }
   }
 
@@ -400,10 +440,18 @@ export class UIController {
         const card = document.createElement('div');
         card.className = `meeting-player-card ${isDead ? 'dead' : ''}`;
         card.innerHTML = `
-          <div class="card-avatar" style="border-color: ${p.color || '#3b82f6'}">${p.avatar || '👤'}</div>
+          <div class="card-avatar" style="border-color: ${this.escapeHtml(p.color || '#3b82f6')}">${this.escapeHtml(p.avatar || '👤')}</div>
           <div class="card-name">${this.escapeHtml(p.name)}</div>
           <div class="card-status">${isDead ? '💀 Ölü' : '❤️ Canlı'}</div>
         `;
+        if (!isDead) {
+          const vote = document.createElement('button');
+          vote.className = 'btn btn-vote';
+          vote.dataset.id = p.id;
+          vote.textContent = p.id === myPlayerId ? 'Sen' : 'Oyla';
+          vote.disabled = p.id === myPlayerId || players.find(me => me.id === myPlayerId)?.isAlive === false;
+          card.appendChild(vote);
+        }
         this.meetingPlayersGrid.appendChild(card);
       });
     }
@@ -420,13 +468,25 @@ export class UIController {
   }
 
   showRoleReveal(role, team) {
-    if (this.vampireController && typeof this.vampireController.showRoleReveal === 'function') {
-      this.vampireController.showRoleReveal(role, team);
-    }
+    this.roleRevealTitle.textContent = role === 'impostor' ? '🔪 CASUS' : '🚀 MÜRETTEBAT';
+    this.roleRevealDesc.textContent = role === 'impostor' ? 'Kimliğini gizle, mürettebatı avla.' : 'Görevleri tamamla ve casusu bul.';
+    this.roleRevealBanner.classList.remove('hidden');
+    clearTimeout(this.roleRevealTimer);
+    this.roleRevealTimer = setTimeout(() => this.roleRevealBanner.classList.add('hidden'), 3000);
   }
 
   showVampireRoleReveal(role, team) {
     this.vampireController.showRoleReveal(role, team);
+  }
+
+  showEjectionScreen(player, isTie, isSkip, message) {
+    if (!this.ejectionScreen) return;
+    this.ejectedAvatar.textContent = player?.avatar || '🌌';
+    this.ejectionTitle.textContent = player ? `${player.name} uzaya gönderildi` : 'Kimse atılmadı';
+    this.ejectionSubtitle.textContent = message || (isTie ? 'Oylar eşit.' : isSkip ? 'Oylama pas geçildi.' : '');
+    this.ejectionScreen.classList.remove('hidden');
+    clearTimeout(this.ejectionTimer);
+    this.ejectionTimer = setTimeout(() => this.ejectionScreen.classList.add('hidden'), 3000);
   }
 
   openVampireNightModal(role, playersMeta, myPlayerId, onAction) {
@@ -435,6 +495,18 @@ export class UIController {
 
   closeVampireNightModal() {
     this.vampireController.closeNightModal();
+  }
+
+  openVampireTrialModal(players, myId, onVote, onSkip) {
+    this.vampireController.openTrial(players, myId, onVote, onSkip);
+  }
+
+  updateVampireTrialVoteCounts(counts, skipCount) {
+    this.vampireController.updateVotes(counts, skipCount);
+  }
+
+  showVampireSeerResult(name, isVampire) {
+    this.vampireController.showSeerResult(name, isVampire);
   }
 
   openConquestQuestionModal(qData, timer, onSubmit) {

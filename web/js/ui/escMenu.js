@@ -141,7 +141,7 @@ export class EscMenuController {
       if (isHost) {
         if (this.ui.btnHudStartMatch) {
           this.ui.btnHudStartMatch.textContent = labels.hudStart;
-          this.ui.btnHudStartMatch.className = 'btn btn-success btn-sm pulse-glow';
+          this.ui.btnHudStartMatch.className = 'btn btn-success btn-sm';
           this.ui.btnHudStartMatch.classList.remove('hidden');
         }
         if (this.ui.btnHudVoteMatch) this.ui.btnHudVoteMatch.classList.add('hidden');

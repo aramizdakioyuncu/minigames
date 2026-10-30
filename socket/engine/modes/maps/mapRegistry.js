@@ -3,6 +3,7 @@
 import { getSpaceshipMap } from './spaceshipMap.js';
 import { getCastleMap } from './castleMap.js';
 import { getMansionMap } from './mansionMap.js';
+import { connectLayout } from './connectedLayout.js';
 
 class MapRegistry {
   constructor() {
@@ -22,7 +23,7 @@ class MapRegistry {
 
   getMap(theme = 'spaceship', hw = 1400, hh = 900) {
     const provider = this.mapProviders.get(theme) || this.mapProviders.get('spaceship');
-    return provider(hw, hh);
+    return connectLayout(provider(hw, hh), hw, hh);
   }
 
   getAvailableThemes() {
