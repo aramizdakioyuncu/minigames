@@ -55,6 +55,39 @@ export class SoundEngine {
   playCorrectChime() { this.conquest.playCorrectChime(); }
   playSwordClash() { this.conquest.playSwordClash(); }
 
+  // Shared short effects for arcade actions. Rate limiting avoids oscillator floods.
+  tone(start, end = start, duration = 0.12, type = 'sine') {
+    if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
+    const now = this.ctx.currentTime;
+    if (now - (this.lastToneAt ?? -1) < 0.025) return;
+    this.lastToneAt = now;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(start, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(1, end), now + duration);
+    gain.gain.setValueAtTime(0.09, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(gain); gain.connect(this.ctx.destination);
+    osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    osc.start(now); osc.stop(now + duration);
+  }
+
+  playPickup() { this.tone(700, 1000, 0.07); }
+  playSplit() { this.tone(180, 700, 0.18); }
+  playMerge() { this.tone(700, 220, 0.22); }
+  playEject() { this.tone(380, 160, 0.09); }
+  playEatPlayer() { this.tone(160, 70, 0.3, 'triangle'); }
+  playDash() { this.tone(120, 600, 0.16, 'triangle'); }
+  playWhistle() { this.tone(1800, 2100, 0.3); }
+  playClick() { this.tone(500, 400, 0.05); }
+  playMagnetHold() { this.tone(200, 500, 0.25); }
+  playTackle() { this.tone(140, 50, 0.12, 'triangle'); }
+  playBite() { this.playKill(); }
+  playGavel() { this.tone(100, 40, 0.15, 'triangle'); }
+  playEmergencySiren() { this.playEmergencyMeeting(); }
+  playEjection() { this.tone(800, 60, 0.8); }
+
   // Level Up Celebratory Fanfare
   playLevelUp() {
     if (this.muted || !this.ctx) return;

@@ -48,7 +48,7 @@ export class SumoMode extends BaseMode {
 
   onPlayerJoin(player) {
     player.isAlive = true;
-    player.isSpectator = false;
+    player.isSpectator = this.roundState === 'active' || this.roundState === 'round_over';
     player.radius = 24;
     player.mass = 3.5;
     player.damping = 0.93;
@@ -115,6 +115,7 @@ export class SumoMode extends BaseMode {
           dx = p1.vel.x;
           dy = p1.vel.y;
         }
+        if (dx === 0 && dy === 0) dx = 1;
         const len = Math.hypot(dx, dy) || 1;
         const dashSpeed = configDb.get('sumo_dash_power') || 20.0;
         p1.vel.x += (dx / len) * dashSpeed;
@@ -176,7 +177,7 @@ export class SumoMode extends BaseMode {
       const activeAlive = playerList.filter(p => !p.isSpectator && p.isAlive);
       const totalParticipants = playerList.filter(p => !p.isSpectator).length;
 
-      if (totalParticipants >= 2 && activeAlive.length <= 1) {
+      if (totalParticipants < 2 || activeAlive.length <= 1) {
         this.roundState = 'round_over';
         this.winner = activeAlive[0] ? activeAlive[0].name : 'Berabere';
         this.resetTimer = 3.5;
@@ -190,8 +191,8 @@ export class SumoMode extends BaseMode {
 
   applyPlayerMovement(player, dt) {
     if (!player.input) return;
-    const accel = configDb.get('sumo_player_accel') * (this.room.speedMultiplier || 1.35);
-    const maxSpeed = configDb.get('sumo_player_max_speed') * (this.room.speedMultiplier || 1.35);
+    const accel = configDb.get('sumo_player_accel') * (this.room.speedMultiplier || 1.35) * dt * 60;
+    const maxSpeed = configDb.get('sumo_player_max_speed') * (this.room.speedMultiplier || 1.35) * (Date.now() - player.lastDashTime < 180 ? 4 : 1);
     let ax = 0;
     let ay = 0;
 

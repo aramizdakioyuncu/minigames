@@ -1,12 +1,26 @@
 {
   "name": "puckarena-monorepo",
   "version": "1.0.0",
-  "description": "Multiplayer 2D Puck Soccer, Sumo & Agar Arcade Platform",
+  "description": "Six-mode multiplayer arcade with authoritative WebSocket simulation",
+  "engines": { "node": ">=24" },
   "scripts": {
+    "start": "node scripts/dev.mjs",
+    "test": "node --test tests/*.test.mjs minigames_backend/test/*.test.js",
+    "test:auth": "npm --prefix minigames_backend test",
+    "test:browser": "playwright test",
+    "test:load": "node scripts/load-smoke.mjs",
+    "test:deployment": "node scripts/deployment-smoke.mjs",
+    "check": "node scripts/check.mjs",
+    "assets:space": "node scripts/build-space-png.mjs",
+    "audit:all": "npm audit && npm --prefix backend audit && npm --prefix socket audit && npm --prefix minigames_backend audit",
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
-    "install:all": "cd backend && npm install && cd ../socket && npm install",
+    "install:all": "npm ci && npm --prefix backend ci && npm --prefix socket ci && npm --prefix minigames_backend ci",
+    "start:auth": "npm --prefix minigames_backend start",
     "start:backend": "cd backend && npm start",
     "start:socket": "cd socket && npm start"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
   }
 }

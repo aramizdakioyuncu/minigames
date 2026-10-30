@@ -2,9 +2,15 @@ import { WebSocketServer } from 'ws';
 import { Room } from './engine/room.js';
 import { configDb } from './db/configDb.js';
 import { modeRegistry } from './engine/modes/modeRegistry.js';
+import { newId, cleanText, allowRate, originAllowed } from './security.js';
+import { isIP } from 'node:net';
+import { verifyAccount } from './auth.js';
 
 const PORT = process.env.PORT || 5050;
-const wss = new WebSocketServer({ port: PORT });
+const ipRates = new Map();
+export const wss = new WebSocketServer({ port: PORT, host: process.env.HOST || '0.0.0.0', maxPayload: 8192, perMessageDeflate: false,
+  verifyClient: ({ req }) => originAllowed(req) && wss.clients.size < 512 });
+wss.on('error', err => { console.error('WebSocket server:', err.message); process.exitCode = 1; });
 
 // Global Room Registry
 export const rooms = new Map();
@@ -81,10 +87,50 @@ initDefaultRooms();
 
 console.log(`🚀 [Socket Server] WebSocket Oyun Sunucusu port ${PORT} üzerinde dinlemede...`);
 
-wss.on('connection', (ws) => {
-  const playerId = 'p_' + Math.random().toString(36).substring(2, 9);
+wss.on('connection', (ws, req) => {
+  const forwarded = req.headers['x-real-ip'];
+  const ip = process.env.TRUST_PROXY === '1' && typeof forwarded === 'string' && isIP(forwarded) ? forwarded : req.socket.remoteAddress;
+  ws.ip = ip;
+  if ([...wss.clients].filter(client => client.ip === ip).length > 64) { ws.close(1013, 'Connection limit'); return; }
+  const playerId = newId('p');
+  const rates = new Map();
+  ws.alive = true;
+  ws.on('pong', () => { ws.alive = true; });
+  ws.on('error', () => {});
   let currentRoom = null;
   let playerRef = null;
+  let account = null;
+  let authVersion = 0;
+  let authTimer;
+  function forgetAccount() {
+    clearTimeout(authTimer);
+    account = null;
+  }
+  function adoptAccount(verified) {
+    if (account && account.id !== verified.id) leaveCurrentRoom();
+    account = verified;
+    if (playerRef) playerRef.accountId = verified.id;
+    clearTimeout(authTimer);
+    authTimer = setTimeout(() => {
+      authVersion++;
+      forgetAccount();
+      leaveCurrentRoom();
+      send(ws, { type: 'auth_expired' });
+    }, Math.max(1, verified.expiresAt - Date.now()));
+    authTimer.unref?.();
+    send(ws, { type: 'auth_state', authenticated: true });
+  }
+  function leaveCurrentRoom() {
+    if (currentRoom) {
+      currentRoom.removePlayer(playerId);
+      if (currentRoom.players.size === 0 && currentRoom.id.startsWith('rm_')) {
+        currentRoom.destroy();
+        rooms.delete(currentRoom.id);
+      }
+    }
+    currentRoom = null;
+    playerRef = null;
+  }
 
   // Send initial room list & modes metadata
   send(ws, {
@@ -94,11 +140,35 @@ wss.on('connection', (ws) => {
     modes: GAME_MODES_META
   });
 
-  ws.on('message', (message) => {
+  ws.on('message', async (message) => {
+    if (!allowRate(rates, 'messages', 150, 1000)) { ws.close(1008, 'Rate limit'); return; }
     try {
       const data = JSON.parse(message);
+      if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.type !== 'string') return;
+      if (data.type === 'chat' && !allowRate(rates, 'chat', 5, 10000)) return;
+      if (!['input', 'ping', 'chat'].includes(data.type) && !allowRate(rates, 'actions', 20, 1000)) return;
 
       switch (data.type) {
+        case 'authenticate': {
+          if (data.accessToken !== null && !allowRate(rates, 'auth', 12, 60000)) return;
+          const version = ++authVersion;
+          if (data.accessToken === null) {
+            forgetAccount();
+            leaveCurrentRoom();
+            send(ws, { type: 'auth_state', authenticated: false });
+            return;
+          }
+          try {
+            const verified = await verifyAccount(data.accessToken);
+            if (version !== authVersion || ws.readyState !== 1) return;
+            adoptAccount(verified);
+          } catch {
+            if (version !== authVersion || ws.readyState !== 1) return;
+            forgetAccount(); leaveCurrentRoom();
+            send(ws, { type: 'auth_expired' });
+          }
+          return;
+        }
         case 'get_rooms': {
           send(ws, {
             type: 'rooms_list',
@@ -108,11 +178,15 @@ wss.on('connection', (ws) => {
         }
 
         case 'create_room': {
-          const roomId = 'rm_' + Math.random().toString(36).substring(2, 8);
-          const roomName = (data.roomName || data.name || 'Özel Oda').substring(0, 24);
+          if (rooms.size >= 64 || !allowRate(ipRates, ip, 3, 60000)) {
+            send(ws, { type: 'error', message: 'Oda oluşturma sınırına ulaşıldı. Biraz sonra tekrar deneyin.' });
+            return;
+          }
+          const roomId = newId('rm');
+          const roomName = cleanText(data.roomName || data.name, 24, 'Özel Oda');
           const availableModes = modeRegistry.getAvailableModes();
           const mode = availableModes.includes(data.mode) ? data.mode : 'puck';
-          const maxPlayers = Math.min(Math.max(parseInt(data.maxPlayers) || 8, 2), 24);
+          const maxPlayers = Math.min(Math.max(parseInt(data.maxPlayers) || 8, 2), mode === 'conquest' ? 8 : mode === 'space' ? 15 : 24);
           const speedMultiplier = Math.min(Math.max(parseFloat(data.speedMultiplier) || 1.35, 0.8), 2.5);
           const matchDuration = Math.min(Math.max(parseInt(data.matchDuration) || 180, 60), 1200);
           const isPrivate = !!data.isPrivate;
@@ -123,6 +197,7 @@ wss.on('connection', (ws) => {
             isPrivate,
             speedMultiplier,
             matchDuration,
+            tackleEnabled: data.tackleEnabled !== false,
             mapTheme
           });
           rooms.set(roomId, newRoom);
@@ -146,16 +221,38 @@ wss.on('connection', (ws) => {
         }
 
         case 'join_room': {
-          if (currentRoom) {
-            currentRoom.removePlayer(playerId);
-            currentRoom = null;
+          const version = ++authVersion;
+          let verifiedAccount = null;
+          // A failed authenticated join must never silently become a guest join.
+          if (data.accessToken !== undefined) {
+            if (!allowRate(rates, 'auth', 12, 60000)) return;
+            try {
+              const verified = await verifyAccount(data.accessToken);
+              if (version !== authVersion || ws.readyState !== 1) return;
+              verifiedAccount = verified;
+            } catch {
+              if (version !== authVersion || ws.readyState !== 1) return;
+              forgetAccount(); leaveCurrentRoom(); send(ws, { type: 'auth_expired' }); return;
+            }
+          } else if (account) {
+            send(ws, { type: 'error', message: 'Hesabınla odaya katılmak için oturumunu yenile.' }); return;
           }
-
           const targetRoom = rooms.get(data.roomId);
           if (!targetRoom) {
             send(ws, { type: 'error', message: 'Oda bulunamadı veya kapatılmış.' });
             return;
           }
+          if (currentRoom === targetRoom) {
+            if (verifiedAccount) adoptAccount(verifiedAccount);
+            return;
+          }
+          if (targetRoom.players.size >= targetRoom.maxPlayers) {
+            send(ws, { type: 'error', message: 'Oda dolu.' });
+            return;
+          }
+          leaveCurrentRoom();
+
+          if (verifiedAccount) adoptAccount(verifiedAccount);
 
           currentRoom = targetRoom;
           playerRef = targetRoom.addPlayer(
@@ -165,6 +262,7 @@ wss.on('connection', (ws) => {
             data.avatar,
             ws
           );
+          playerRef.accountId = account?.id || null;
 
           send(ws, {
             type: 'joined_room',
@@ -172,17 +270,16 @@ wss.on('connection', (ws) => {
             roomName: targetRoom.name,
             mode: targetRoom.modeType,
             playerId: playerId,
-            team: playerRef.team
+            team: playerRef.team,
+            authenticated: Boolean(account)
           });
           break;
         }
 
         case 'leave_room': {
-          if (currentRoom) {
-            currentRoom.removePlayer(playerId);
-            currentRoom = null;
-            playerRef = null;
-          }
+          authVersion++;
+          forgetAccount();
+          leaveCurrentRoom();
           send(ws, {
             type: 'left_room',
             rooms: getPublicRoomsList()
@@ -238,7 +335,10 @@ wss.on('connection', (ws) => {
         }
 
         case 'chat': {
-          if (currentRoom && data.text && playerRef) {
+          if (currentRoom && typeof data.text === 'string' && playerRef) {
+            if (['space', 'vampire'].includes(currentRoom.modeType) &&
+                !['waiting', 'game_over'].includes(currentRoom.mode.gameState) &&
+                (playerRef.isSpectator || playerRef.isAlive === false)) break;
             // In Space mode, chat is closed during active gameplay and only allowed during emergency meetings / lobby
             if (currentRoom.modeType === 'space' && currentRoom.mode && currentRoom.mode.gameState === 'playing') {
               send(ws, {
@@ -294,27 +394,23 @@ wss.on('connection', (ws) => {
 
         case 'ping': {
           const clientTime = data.t;
+          if (!Number.isFinite(clientTime)) return;
           if (playerRef) {
-            playerRef.ping = Math.max(1, Date.now() - clientTime);
+            playerRef.ping = Math.min(9999, Math.max(1, Date.now() - clientTime));
           }
           send(ws, { type: 'pong', clientTime, serverTime: Date.now() });
           break;
         }
       }
     } catch (err) {
-      console.error('Socket message parse error:', err);
+      send(ws, { type: 'error', message: 'Geçersiz mesaj.' });
     }
   });
 
   ws.on('close', () => {
-    if (currentRoom) {
-      currentRoom.removePlayer(playerId);
-      // Clean up empty custom/private rooms (keep default rooms open)
-      if (currentRoom.players.size === 0 && currentRoom.id.startsWith('rm_')) {
-        currentRoom.destroy();
-        rooms.delete(currentRoom.id);
-      }
-    }
+    authVersion++;
+    forgetAccount();
+    leaveCurrentRoom();
   });
 });
 
@@ -329,7 +425,29 @@ function getPublicRoomsList() {
 }
 
 function send(ws, msg) {
-  if (ws.readyState === 1) { // OPEN
+  if (ws.readyState === 1 && ws.bufferedAmount < 1024 * 1024) {
     ws.send(JSON.stringify(msg));
   }
 }
+
+const maintenance = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (!ws.alive || ws.bufferedAmount > 1024 * 1024) { ws.terminate(); continue; }
+    ws.alive = false;
+    ws.ping();
+  }
+  for (const [key, entry] of ipRates) if (Date.now() - entry.start > 60000) ipRates.delete(key);
+  for (const [id, room] of rooms) {
+    if (id.startsWith('rm_') && !room.players.size && Date.now() - room.createdAt > 60000) {
+      room.destroy(); rooms.delete(id);
+    }
+  }
+}, 30000);
+export function shutdown() {
+  clearInterval(maintenance);
+  for (const room of rooms.values()) room.destroy();
+  for (const ws of wss.clients) ws.terminate();
+  wss.close();
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

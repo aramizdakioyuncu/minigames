@@ -9,12 +9,29 @@ export class BaseMode {
     this.name = 'base';
     this.width = 1200;
     this.height = 700;
+    this.pendingTimers = new Set();
   }
 
   /**
    * Called when the mode is initialized or restarted.
    */
   init() {}
+
+  schedule(callback, delay) {
+    const timer = setTimeout(() => {
+      this.pendingTimers.delete(timer);
+      if (this.room.mode === this) callback();
+    }, delay);
+    this.pendingTimers.add(timer);
+    return timer;
+  }
+
+  cancelTimers() {
+    for (const timer of this.pendingTimers) clearTimeout(timer);
+    this.pendingTimers.clear();
+  }
+
+  destroy() { this.cancelTimers(); }
 
   /**
    * Called when a player joins the room.

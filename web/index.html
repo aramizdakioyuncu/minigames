@@ -2,12 +2,10 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ARMOYU MiniGames - Çok Oyunculu Web Oyunları Arenası</title>
-  <meta name="description" content="ARMOYU MiniGames: Tarayıcıda gerçek zamanlı 2D Disk Futbolu, Uzay Casusu, Sumo Knockout ve Agar büyüme oyunları platformu.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="description" content="ARMOYU MiniGames: Disk Futbolu, Sumo, Agar, Uzay Casusu, Vampir Köylü ve Bil ve Fethet ile altı çok oyunculu tarayıcı oyunu.">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -30,23 +28,34 @@
           <p class="brand-subtitle">Çok Oyunculu Web Oyunları Platformu</p>
         </div>
 
-        <!-- Social Login Action Buttons -->
-        <div class="social-login-group">
-          <button id="btn-login-google" class="btn btn-social btn-google">
-            <span class="social-icon">🔴</span>
-            <span>Google ile Giriş Yap</span>
-            <span class="bonus-badge">+100 XP</span>
-          </button>
-          <button id="btn-login-facebook" class="btn btn-social btn-facebook">
-            <span class="social-icon">🔵</span>
-            <span>Facebook ile Giriş Yap</span>
-            <span class="bonus-badge">+100 XP</span>
-          </button>
+        <div id="auth-tabs" class="auth-tabs" aria-label="Oturum seçenekleri">
+          <button type="button" class="btn btn-secondary" data-auth-mode="guest" aria-pressed="true">Misafir</button>
+          <button type="button" class="btn btn-secondary" data-auth-mode="login" aria-pressed="false">Giriş Yap</button>
+          <button type="button" class="btn btn-secondary" data-auth-mode="register" aria-pressed="false">Kayıt Ol</button>
         </div>
-
-        <div class="auth-divider">
-          <span>veya Misafir / Takma Ad ile Oyna</span>
+        <div id="auth-account" class="auth-account hidden">
+          <p id="auth-account-name"></p>
+          <button type="button" id="btn-auth-logout" class="btn btn-secondary btn-sm">Hesaptan Çıkış Yap</button>
         </div>
+        <form id="auth-form" class="auth-form hidden">
+          <div id="auth-name-group" class="form-group hidden">
+            <label for="auth-full-name">Ad Soyad</label>
+            <input id="auth-full-name" type="text" minlength="2" maxlength="120" autocomplete="name">
+          </div>
+          <div class="form-group">
+            <label for="auth-email">E-posta</label>
+            <input id="auth-email" type="email" maxlength="254" autocomplete="username" required>
+          </div>
+          <div class="form-group">
+            <label for="auth-password">Şifre</label>
+            <input id="auth-password" type="password" maxlength="256" autocomplete="current-password" required>
+          </div>
+          <button id="btn-auth-submit" type="submit" class="btn btn-primary btn-large">Giriş Yap</button>
+          <button id="btn-auth-resend" type="button" class="btn btn-secondary hidden">Doğrulama E-postasını Tekrar Gönder</button>
+        </form>
+        <p id="auth-message" class="auth-message" role="status" aria-live="polite"></p>
+        <div id="guest-customization">
+        <p class="brand-subtitle">Takma adını ve görünümünü seç. Oyun istatistikleri bu tarayıcıda saklanır.</p>
 
         <div class="form-group">
           <label for="input-nickname">Oyuncu Takma Adı</label>
@@ -95,6 +104,7 @@
         <div class="server-status-pill">
           <span class="status-dot"></span>
           <span id="txt-server-status">WebSocket Sunucusuna Bağlanıyor...</span>
+        </div>
         </div>
       </div>
     </div>
@@ -376,7 +386,7 @@
           </div>
           <div class="space-hud-actions">
             <div class="space-role-pill" id="space-role-badge">🛠️ MÜRETTEBAT</div>
-            <button class="btn btn-sm btn-danger space-sabotage-btn hidden" id="btn-space-sabotage" title="Sabotaj Yap (Q)">🚨 Sabotaj (Q)</button>
+            <button class="btn btn-sm btn-danger space-sabotage-btn hidden" id="btn-space-sabotage" title="Sabotaj Yap (B)">🚨 Sabotaj (B)</button>
             <button class="btn btn-sm btn-secondary space-map-btn" id="btn-space-minimap" title="Harita (M)">🗺️ Harita (M)</button>
           </div>
         </div>
@@ -585,7 +595,7 @@
                 <span class="sabotage-big-icon">⚡</span>
                 <div class="sabotage-texts">
                   <h4>Elektrik Kes (Işıklar Sönsün)</h4>
-                  <p>Mürettebatın görüş alanını 20 saniyeliğine karartır. Sen karanlıkta net görürsün!</p>
+                  <p>Jeneratör onarılana kadar mürettebatın görüşünü daraltır.</p>
                 </div>
               </div>
               <button class="btn btn-danger btn-block btn-trigger-sabotage" id="btn-sabotage-lights">
@@ -609,7 +619,11 @@
               </button>
             </div>
           </div>
-          <div class="sabotage-footer-hint">Kapatmak için <b>Q</b> veya <b>ESC</b></div>
+          <div class="sabotage-action-card">
+            <div class="sabotage-card-top"><span class="sabotage-big-icon">☢️</span><div class="sabotage-texts"><h4>Kritik Reaktör Sabotajı</h4><p>30 saniyede iki farklı panel aynı anda tutulmazsa casuslar kazanır.</p></div></div>
+            <button class="btn btn-danger btn-block" id="btn-sabotage-reactor">Reaktörü Sabote Et <span id="cd-sabotage-reactor"></span></button>
+          </div>
+          <div class="sabotage-footer-hint">Kapatmak için <b>B</b> veya <b>ESC</b></div>
         </div>
       </div>
 
@@ -627,10 +641,10 @@
           <div class="task-mini-body">
             <!-- Task 1: Wiring (Elektrik) -->
             <div id="task-panel-wires" class="task-panel hidden">
-              <p class="task-instruction">Soldaki renkli kabloları sağdaki eşleşen renklere bağla!</p>
+              <p class="task-instruction">Kabloyu aynı renkteki uca sürükle. İstersen iki uca sırayla tıklayarak da bağlayabilirsin.</p>
               <div class="wiring-game-box" id="wiring-game-box">
                 <div class="wire-column wire-left" id="wire-left-col"></div>
-                <svg class="wire-svg" id="wire-svg"></svg>
+                <svg class="wire-svg" id="wire-svg" aria-label="Bağlanan kablolar"></svg>
                 <div class="wire-column wire-right" id="wire-right-col"></div>
               </div>
             </div>
@@ -876,6 +890,9 @@
               🔍 Kamera Açısı: Normal (1.0x)
             </button>
 
+            <button id="btn-copy-invite" class="btn btn-secondary btn-block">🔗 Oda Davetini Kopyala</button>
+            <input id="room-invite-url" class="hidden" type="text" readonly aria-label="Oda davet bağlantısı" style="width:100%">
+
             <!-- Leave Room -->
             <button id="btn-esc-leave-room" class="btn btn-danger btn-block">
               🚪 Odadan Ayrıl & Lobiye Dön
@@ -991,6 +1008,7 @@
         <!-- Account Connection & Actions -->
         <div class="dash-section-title">🔐 HESAP BAĞLANTISI</div>
         <div class="dash-account-actions">
+          <button id="btn-profile-login" class="btn btn-primary btn-sm">Hesabına Giriş Yap</button>
           <button id="btn-profile-logout" class="btn btn-secondary btn-sm">
             <span>🚪 Yeni Misafir Oluştur / Sıfırla</span>
           </button>

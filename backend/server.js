@@ -1,12 +1,15 @@
 import express from 'express';
-import cors from 'cors';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const SOCKET_URL = process.env.SOCKET_URL || 'ws://localhost:5050';
+const SOCKET_URL = '/ws';
 
-app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 
 // Server Statistics & System Health
 const serverStartTime = Date.now();
@@ -37,7 +40,7 @@ const GAME_MODES = [
     color: '#10b981',
     description: 'Arenadaki enerji kürelerini yut, kütleni büyüt, bölünüp yem fırlatarak liderlik tablosunun zirvesine yerleş!',
     maxPlayers: 20,
-    controls: ['WASD / Yön Tuşları: Hareket', 'Boşluk / Sol Tık: İkiye Bölün (Split)', 'E / W / Sağ Tık: Yem At (Feed)']
+    controls: ['WASD / Yön Tuşları: Hareket', 'Boşluk / Sol Tık: İkiye Bölün (Split)', 'E / F / Sağ Tık: Yem At (Feed)']
   },
   {
     id: 'space',
@@ -91,6 +94,6 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+export const server = app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`🌐 [Backend API] REST Signalling API port ${PORT} üzerinde hazır!`);
 });

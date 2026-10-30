@@ -42,87 +42,11 @@ export class ProfileUIController {
       btnCloseProfile.addEventListener('click', () => this.closeProfileDashboard());
     }
 
-    // Profile Auth Tabs Switch (Guest vs Account Login vs Register)
-    const authTabButtons = document.querySelectorAll('.auth-tab-btn');
-    authTabButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        authTabButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const tab = btn.dataset.tab;
-        const panelGuest = document.getElementById('auth-panel-guest');
-        const panelAccount = document.getElementById('auth-panel-account');
-        if (panelGuest && panelAccount) {
-          panelGuest.classList.toggle('hidden', tab !== 'guest');
-          panelAccount.classList.toggle('hidden', tab === 'guest');
-        }
-      });
-    });
-
-    const completeSocialLogin = (p, providerName) => {
-      this.ui.showToast(`✅ ${providerName} ile giriş yapıldı: ${p.name} (+100 XP)`);
-      this.renderUserProfileHeader();
-      this.closeProfileDashboard();
-
-      if (window.audio && typeof window.audio.init === 'function') {
-        window.audio.init();
-      }
-
-      // If user is currently on login view, transition straight to lobby
-      if (this.ui.currentView === 'view-profile' || !this.ui.currentView) {
-        this.ui.showView('view-lobby');
-        if (window.gameApp && window.gameApp.socket) {
-          window.gameApp.socket.send({ type: 'get_rooms' });
-        }
-      }
-    };
-
-    // Social Login Buttons (Google & Facebook)
-    const btnGoogle = document.getElementById('btn-login-google');
-    const btnFacebook = document.getElementById('btn-login-facebook');
-    const btnGuestSocial = document.getElementById('btn-login-guest-submit');
-
-    if (btnGoogle) {
-      btnGoogle.addEventListener('click', () => {
-        const p = profileManager.loginWithSocial('google');
-        completeSocialLogin(p, 'Google');
-      });
-    }
-
-    if (btnFacebook) {
-      btnFacebook.addEventListener('click', () => {
-        const p = profileManager.loginWithSocial('facebook');
-        completeSocialLogin(p, 'Facebook');
-      });
-    }
-
-    if (btnGuestSocial) {
-      btnGuestSocial.addEventListener('click', () => {
-        const guestNameInput = document.getElementById('input-guest-custom-name');
-        const name = guestNameInput ? guestNameInput.value.trim() : null;
-        const p = profileManager.loginAsGuest(name);
-        completeSocialLogin(p, 'Misafir');
-      });
-    }
-
-    // Account Form Submit
-    const btnAccountSubmit = document.getElementById('btn-account-submit');
-    if (btnAccountSubmit) {
-      btnAccountSubmit.addEventListener('click', () => {
-        const usernameInput = document.getElementById('input-account-username');
-        const name = usernameInput ? usernameInput.value.trim() : '';
-        if (!name) {
-          this.ui.showToast('⚠️ Lütfen bir kullanıcı adı girin');
-          return;
-        }
-        const p = profileManager.loginWithCredentials(name);
-        completeSocialLogin(p, 'Kullanıcı Hesabı');
-      });
-    }
-
     // Logout / Reset Guest Profile
     const btnLogout = document.getElementById('btn-profile-logout');
     if (btnLogout) {
       btnLogout.addEventListener('click', () => {
+        if (!profileManager.getProfile().isGuest) { window.gameApp?.authUI.logout(); return; }
         profileManager.logout();
         this.ui.showToast('🚪 Çıkış yapıldı. Yeni misafir profili oluşturuldu.');
         this.renderUserProfileHeader();
@@ -134,6 +58,10 @@ export class ProfileUIController {
   renderUserProfileHeader() {
     const p = profileManager.getProfile();
     const avatarBadge = document.getElementById('lobby-user-avatar');
+    const loginButton = document.getElementById('btn-profile-login');
+    if (loginButton) loginButton.classList.toggle('hidden', !p.isGuest);
+    const logoutButton = document.getElementById('btn-profile-logout');
+    if (logoutButton) logoutButton.textContent = p.isGuest ? 'Misafir Profilini Sıfırla' : 'Hesaptan Çıkış Yap';
     const nameText = document.getElementById('lobby-user-name');
     const levelBadge = document.getElementById('lobby-user-level-badge');
     const xpBar = document.getElementById('lobby-user-xp-bar');
@@ -188,15 +116,7 @@ export class ProfileUIController {
     if (modalXpFill) modalXpFill.style.width = `${progressPercent}%`;
 
     if (modalAuthStatus) {
-      if (p.isGuest) {
-        modalAuthStatus.innerHTML = '<span class="status-badge guest">👤 Misafir Hesabı</span>';
-      } else if (p.authProvider === 'google') {
-        modalAuthStatus.innerHTML = '<span class="status-badge google">🔵 Google Bağlı</span>';
-      } else if (p.authProvider === 'facebook') {
-        modalAuthStatus.innerHTML = '<span class="status-badge facebook">🔷 Facebook Bağlı</span>';
-      } else {
-        modalAuthStatus.innerHTML = '<span class="status-badge member">⭐ Kayıtlı Üye</span>';
-      }
+      modalAuthStatus.textContent = p.isGuest ? 'Misafir · Bu tarayıcıdaki profil' : `Hesap: ${p.email} · İstatistikler bu tarayıcıda`;
     }
 
     // Stats Grid

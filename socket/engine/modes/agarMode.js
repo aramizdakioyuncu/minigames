@@ -80,6 +80,11 @@ export class AgarMode extends BaseMode {
     return Math.min(130, 16 + Math.sqrt(Math.max(1, score)) * 4.2);
   }
 
+  onPlayerLeave(player) {
+    this.lastSplitTimes.delete(player.id);
+    this.lastFeedTimes.delete(player.id);
+  }
+
   handlePlayerInput(player) {
     if (!player.input || player.isSpectator) return;
     const now = Date.now();
@@ -120,6 +125,7 @@ export class AgarMode extends BaseMode {
           if (player.input.up) dirY = -1;
           if (player.input.down) dirY = 1;
         }
+        if (dirX === 0 && dirY === 0) dirX = 1;
         const len = Math.hypot(dirX, dirY) || 1;
         const normX = dirX / len;
         const normY = dirY / len;
@@ -169,6 +175,7 @@ export class AgarMode extends BaseMode {
           if (player.input.up) dirY = -1;
           if (player.input.down) dirY = 1;
         }
+        if (dirX === 0 && dirY === 0) dirX = 1;
         const len = Math.hypot(dirX, dirY) || 1;
         const normX = dirX / len;
         const normY = dirY / len;
@@ -180,6 +187,7 @@ export class AgarMode extends BaseMode {
           score: halfScore,
           radius: this.calcRadius(halfScore),
           canMergeAt: now + 9000
+          ,splitUntil: now + 200
         };
 
         newCells.push(childCell);
@@ -213,6 +221,7 @@ export class AgarMode extends BaseMode {
 
   update(dt, secTimerTick) {
     const now = Date.now();
+    this.ejectedPellets = this.ejectedPellets.filter(p => now - p.createdAt < 60000).slice(-1000);
 
     // 1. Maintain map pellets
     if (this.pellets.length < this.maxPellets) {
@@ -478,8 +487,8 @@ export class AgarMode extends BaseMode {
 
     // Speed scales inversely with cell radius
     const speedRatio = Math.max(0.4, 1.3 - (cell.radius - 16) * 0.012);
-    const accel = baseAccel * speedRatio * (this.room.speedMultiplier || 1.0);
-    const maxSpeed = baseMaxSpeed * speedRatio * (this.room.speedMultiplier || 1.0);
+    const accel = baseAccel * speedRatio * (this.room.speedMultiplier || 1.0) * dt * 60;
+    const maxSpeed = baseMaxSpeed * speedRatio * (this.room.speedMultiplier || 1.0) * (Date.now() < cell.splitUntil ? 5 : 1);
 
     let ax = 0;
     let ay = 0;

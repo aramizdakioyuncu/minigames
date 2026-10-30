@@ -1,207 +1,111 @@
-# ⚽ PuckArena - Çok Oyunculu 2D Disk Futbolu & Arcade Mini Oyunlar Platformu
+﻿# PuckArena / ARMOYU MiniGames
 
-<div align="center">
+Türkçe arayüzlü, altı mod içeren çok oyunculu tarayıcı oyunu. Fizik ve oyun kuralları Node.js WebSocket sunucusunda hesaplanır. İstemci PIXI/WebGL kullanır; WebGL yoksa Canvas2D çizimine geçer.
 
-![PuckArena Banner](https://img.shields.io/badge/PuckArena-v1.0.0-3b82f6?style=for-the-badge&logo=game-and-watch&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)
-![WebSocket](https://img.shields.io/badge/WebSocket-Native%2060Hz-010101?style=for-the-badge&logo=socketdotio&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Coolify%20Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-purple?style=for-the-badge)
+## Çalıştırma
 
-<p align="center">
-  <b>Tarayıcı üzerinde hiçbir eklenti veya yükleme gerektirmeden çalışan, düşük gecikmeli, sunucu yetkili (server-authoritative) 2D fizik motoruna sahip çok oyunculu arcade mini oyun platformu.</b>
-</p>
+Node.js 24+ gerekir. Proje kökünde:
 
-[🎮 Oyun Modları](#-oyun-modları) • [✨ Öne Çıkan Özellikler](#-öne-çıkan-özellikler) • [⌨️ Kontroller](#️-kontroller-ve-kısayollar) • [🚀 Kurulum ve Docker](#-kurulum-ve-çalıştırma) • [☁️ Coolify Dağıtımı](#️-coolify-üzerinde-tek-tık-canlıya-alma) • [📐 Mimari](#-sistem-mimarisi)
-
----
-
-</div>
-
-## 🎮 Oyun Modları
-
-### 1. ⚽ Disk Futbolu (Puck Soccer Arena)
-* **2D Fizik & Şut Dinamiği:** İki takım (🔴 Kırmızı ve 🔵 Mavi) kalesine gol atmak için yarışır. Gerçekçi top sürtünmesi, kale direği sekmeleri ve hassas şut ivmesi.
-* **🧲 Top Tutma & Çalım Yeteneği (Hold Skill):** Topu `Shift`, `E` veya `Sağ Tık` ile diskinize kilitleyerek 2 saniye boyunca sürebilir, ardından rakiplerinizi ters ayakta bırakıp şut çekebilirsiniz (5 saniye cooldown süresi).
-* **🥊 Sert Müdahale (Tackle / Faul Açık/Kapalı):** Oda açarken seçilebilen gövde gösterisi ve itişme mekaniği.
-* **👁️ Tribün / İzleyici Alanı (Spectator Lounge):** "İzle" seçildiğinde oyuncu saha çizgisinin dışındaki tribün alanında serbestçe gezinebilir, maça müdahale etmeden heyecanı yakından izleyebilir.
-* **Otomatik Hakem:** Gol algılama, gol kutlaması, skorbord ve maç süresi sayacı.
-
-### 2. 🥊 Sumo Knockout (Battle Royale)
-* **Daralan Ölüm Çemberi:** Zaman geçtikçe daralan çemberin içinde kalın.
-* **⚡ Ani Dash Yeteneği:** `Boşluk` veya `Sol Tık` ile rakiplerinize ani hızla çarparak onları ring dışına savurun.
-* **Hayatta Kalan Kazanır:** Ringin dışına çıkan diskler elenir, son kalan oyuncu taç giyer 👑.
-
-### 3. 🟢 Agar Bump & Feed (Büyüme Arenası)
-* **Besin Toplama & Büyüme:** Haritadaki renkli enerji kürelerini yiyerek kütlenizi ve çapınızı büyütün.
-* **✂️ İkiye Bölünme (Split):** `Boşluk (Space)` veya `Sol Tık` ile diskinizi ileri doğru ikiye fırlatıp rakipleri yutabilir veya hızlı hamle yapabilirsiniz (Hücreler bir süre sonra otomatik birleşir).
-* **🍇 Yem Fırlatma (Eject Mass / Feed):** `E`, `W`, `F` veya `Sağ Tık` ile ileriye enerji yemi atarak kütle transferi yapabilir veya takım arkadaşlarınızı besleyebilirsiniz.
-* **🏆 Canlı Liderlik Tablosu (Leaderboard / Scoreboard):** En yüksek kütleye sahip ilk 10 oyuncu sağ üstteki cam efektli tabloda anlık sıralanır.
-
-### 4. 🚀 Uzay Casusu (Spaceship Impostor)
-* **🛸 Uzay Gemisi Haritası:** Kafeterya, Reaktör, Elektrik, Revir, Kokpit ve Güvenlik odalarından oluşan geniş uzay gemisinde keşif yapın.
-* **🔧 Mürettebat Görevleri:** Kablo onarımı, Reaktör soğutma, Biyometrik tarama, Rota belirleme, Kalkan ayarlama ve Çöp boşaltma istasyonlarına yaklaşarak (`E` veya `Boşluk` basılı tutarak) görevleri tamamlayın.
-* **🔪 Casus Yetenekleri:** 
-  * `Q` tuşuyla yakındaki mürettebatı gizlice avlayın (18 saniye bekleme süresi).
-  * `V` tuşuyla havalandırma mazgallarına (Vent) girin ve gemi içinde görünmez şekilde odalar arası ışınlanın.
-* **🚨 Acil Durum & Ceset Bildirimi (Report):**
-  * `R` tuşuyla yerde bulunan bir cesedi bildirin veya Kafeterya ortasındaki acil durum butonuna basın.
-  * Tüm oyuncular toplantı masasına toplanır, canlı oylama ekranında şüphelileri tartışıp oylarını verir (`At / Pas Geç`).
-  * En çok oyu alan oyuncu uzay boşluğuna fırlatılır!
-
----
-
-## ✨ Öne Çıkan Özellikler
-
-- ⚡ **60 Hz Sunucu Yetkili (Server-Authoritative) Fizik:** İstemci taraflı hileleri engeller; tüm çarpışma, hız, bölünme, havalandırma ve temas hesaplamaları sunucuda gerçekleşir.
-- 🎯 **Dead-Reckoning & Hız Ekstrapolasyonu:** Ağ gecikmesinde bile pürüzsüz 60/120 FPS akıcı disk hareketleri ve top süzülmesi.
-- 🔊 **Prosedürel Web Audio API:** Dış ses dosyasına gerek kalmadan şut, bölünme, yem atma, yutma, acil durum sireni, cinayet, havalandırma ve görev tamamlama efektleri.
-- 📱 **Tam Mobil Dokunmatik Desteği:** Sanal joystick, dinamik aksiyon butonları (`Şut`, `Bölün`, `Öldür`, `Vent`, `Bildir`) ile mobil tarayıcılarda kusursuz deneyim.
-- 🎨 **Modern Glassmorphic UI:** Canlı renk paleti, karanlık tema, oylama arayüzü ve Türkçe arayüz.
-- 💬 **Oyun İçi Gerçek Zamanlı Sohbet:** Lobi, maç ve oylama toplantısı sırasında diğer oyuncularla iletişim.
-- 🔒 **Özelleştirilebilir Odalar:** Hız çarpanı (1.0x - 2.0x Turbo), maç süresi, kişi sayısı ve gizli oda desteği.
-
----
-
-## ⌨️ Kontroller ve Kısayollar
-
-| Aksiyon | Disk Futbolu | Sumo Arenası | Agar Büyüme Modu | Uzay Casusu (Spaceship) | Dokunmatik (Mobil) |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Hareket** | `WASD` / `Yönler` | `WASD` / `Yönler` | `WASD` / `Yönler` | `WASD` / `Yönler` | Sol Sanal Joystick |
-| **Ana Aksiyon 1** | `Boşluk` / `Sol Tık`: **Şut** | `Boşluk`: **Dash** | `Boşluk`: **Bölün** | `E` / `Boşluk`: **Görev Yap / Buton** | ⚡ Sağ Birincil Buton |
-| **Özel Yetenek** | `Shift` / `E`: **Top Tut** | — | `E` / `W`: **Yem At** | `Q`: **Öldür (Casus)** | 🔪 / 🍇 İkincil Buton |
-| **Havalandırma** | — | — | — | `V`: **Vent Gir / Değiştir** | 🌀 Vent Butonu |
-| **Ceset Bildir** | — | — | — | `R`: **Report (Bildir)** | 🚨 Report Butonu |
-| **Sohbet** | `Enter` | `Enter` | `Enter` | `Enter` | Sohbet Giriş Kutusu |
-
----
-
-## 📐 Sistem Mimarisi
-
-```
-                           [ İnternet / Kullanıcılar ]
-                                        │
-                                        ▼ (Tek Port Girişi: 80 / 8080)
-                     ┌──────────────────────────────────────┐
-                     │          Nginx Reverse Proxy         │
-                     │          (web container : 80)        │
-                     └───────────────┬──────────────────────┘
-                                     │
-                 ┌───────────────────┴───────────────────┐
-                 │                                       │
-     (HTTP /api/* rotaları)                    (WebSocket /ws rotası)
-                 │                                       │
-                 ▼                                       ▼
-    ┌─────────────────────────┐             ┌─────────────────────────┐
-    │     Backend REST API    │             │   WebSocket Oyun Motoru │
-    │   (Node.js / Express)   │             │     (60Hz Physics Loop) │
-    │   İç Port: 4000 (Gizli) │             │   İç Port: 5050 (Gizli) │
-    └─────────────────────────┘             └─────────────────────────┘
-                 ▲                                       ▲
-                 └───────────────────┬───────────────────┘
-                                     │
-                     ┌───────────────────────────────┐
-                     │    İzole Docker Bridge Ağı    │
-                     │         (ball_net)            │
-                     └───────────────────────────────┘
-```
-
-> [!NOTE]
-> **Güvenli ve İzole Ağ:** Sadece `web` servisi dış dünyaya port açar. Backend API (`4000`) ve WebSocket Sunucusu (`5050`) sadece dahili Docker ağı üzerinden iletişim kurar. Bu sayede sunucunuzdaki veya macOS sisteminizdeki diğer servislerle (PostgreSQL, MinIO, Redis, AirPlay vb.) hiçbir port çakışması yaşanmaz.
-
----
-
-## 🚀 Kurulum ve Çalıştırma
-
-### Gereksinimler
-- [Docker](https://www.docker.com/) ve [Docker Compose](https://docs.docker.com/compose/)
-- *(İsteğe bağlı)* Node.js 18+ (Yerel geliştirme için)
-
-### Docker ile Tek Komutla Başlatma
-
-```bash
-# Projeyi klonlayın
-git clone https://github.com/kullanici-adiniz/puckarena.git
-cd puckarena
-
-# Konteynerleri derleyin ve arka planda başlatın
-docker compose up -d --build
-```
-
-Tarayıcınızdan **`http://localhost:8080`** adresine giderek oyuna anında katılabilirsiniz!
-
----
-
-## ☁️ Coolify Üzerinde Tek Tık Canlıya Alma
-
-PuckArena, **Coolify** gibi modern PaaS panelleri için %100 uyumlu olarak yapılandırılmıştır:
-
-1. Coolify panelinizde **New Resource** ➔ **Docker Compose** seçeneğini seçin.
-2. GitHub deponuzu bağlayın.
-3. Ortam değişkenlerinde (Environment Variables) dilerseniz `WEB_PORT` değerini belirleyin (Varsayılan: `8080`).
-4. **Deploy** butonuna tıklayın.
-5. Coolify otomatik olarak SSL sertifikasını bağlayacak ve Nginx üzerindeki `/ws` ve `/api` rotalarını yönlendirecektir.
-
----
-
-## 🛠️ Yerel Geliştirme (Local Development)
-
-Docker olmadan her servisi bağımsız çalıştırmak için:
-
-```bash
-# 1. Bağımlılıkları yükleyin
+```sh
 npm run install:all
-
-# 2. WebSocket sunucusunu başlatın (Terminal 1)
-npm run start:socket
-
-# 3. Backend REST API'yi başlatın (Terminal 2)
-npm run start:backend
-
-# 4. Web klasörünü herhangi bir statik sunucuyla açın (Terminal 3)
-npx serve web
+npm start
 ```
 
----
+Adres: **http://localhost:8080**. PowerShell yürütme ilkesi `npm.ps1` dosyasını engellerse komutlarda `npm.cmd` kullanın.
 
-## 📁 Dizin Yapısı
+Geliştirme komutu oyun API'sini `127.0.0.1:4000`, kimlik servisini `127.0.0.1:4100`, oyun sunucusunu `127.0.0.1:5050`, ortak HTTP/WebSocket girişini `127.0.0.1:8080` üzerinde başlatır. `WEB_PORT`, `BACKEND_PORT`, `AUTH_PORT`, `SOCKET_PORT` ortam değişkenleriyle portlar değiştirilebilir. `Ctrl+C` servisleri durdurur. Yerel çalıştırıcı kök `.env` dosyasını otomatik okumaz; portları kabuğunuzda tanımlayın. Kimlik servisi kendi `minigames_backend/.env` dosyasını okur.
 
-```
-puckarena/
-├── docker-compose.yml       # Coolify & Docker Compose orkestrasyonu
-├── package.json             # Kök monorepo betikleri
-├── web/                     # Frontend İstemcisi
-│   ├── index.html           # Arayüz ve Canvas katmanı
-│   ├── style.css            # Glassmorphic stil dosyası
-│   ├── nginx.conf           # Reverse Proxy & WebSocket yönlendirici
-│   ├── Dockerfile           # Web Dockerfile (Alpine Nginx)
-│   └── js/
-│       ├── app.js           # Ana uygulama yaşam döngüsü
-│       ├── renderer.js      # HTML5 Canvas 60/120 FPS çizim motoru
-│       ├── socketClient.js  # WebSocket istemci iletişimi
-│       ├── physicsClient.js # İstemci tahmin ve enterpolasyon
-│       ├── input.js         # Klavye, Fare ve Mobil dokunmatik yöneticisi
-│       ├── audio.js         # Web Audio API ses efektleri sentezleyici
-│       └── ui.js            # DOM & HUD yöneticisi
-├── socket/                  # WebSocket Oyun Sunucusu
-│   ├── server.js            # WS sunucu yöneticisi & oda kaydı
-│   ├── Dockerfile           # Socket Dockerfile (Node.js Alpine)
-│   ├── db/
-│   │   └── configDb.js      # Sunucu taraflı kalibre edilmiş fizik sabitleri
-│   └── engine/
-│       ├── physics.js       # 2D Vektör & Daire çarpışma motoru
-│       ├── room.js          # 60Hz oda simülasyon döngüsü
-│       └── modes/
-│           ├── puckMode.js  # Disk Futbolu maç kuralları & top tutma yeteneği
-│           ├── sumoMode.js  # Sumo daralan çember & dash mekaniği
-│           └── agarMode.js  # Agar büyüme & enerji küreleri
-└── backend/                 # REST API Servisi
-    ├── server.js            # Express API, sağlık kontrolü ve mod listesi
-    └── Dockerfile           # Backend Dockerfile (Node.js Alpine)
+## Phatsa kimlik servisi
+
+`minigames_backend`, Express 5 ve Phatsa'nın resmî `@phatsa/client` SDK'sıyla giriş/kayıt sunar. `/api/auth/login`, `/api/auth/register`, `/api/auth/me`, `/api/auth/refresh`, `/api/auth/logout` ve e-posta doğrulama uçları yerel gateway ve Docker nginx üzerinden erişilebilir. Middleware katmanları alan doğrulama, Bearer doğrulama, istek limiti, origin kontrolü ve merkezi hata yönetimini uygular.
+
+Yerelde `minigames_backend/.env.example` dosyasını `.env` olarak kopyalayıp `PHATSA_URL` ve `PHATSA_API_KEY` alanlarını doldurun. Docker'da bu alanları kök `.env` veya dağıtım ortamında tanımlayın; ayarlar servis klasöründeyse `docker compose --env-file minigames_backend/.env up --build -d` kullanın. Bilgiler yoksa misafir oyunları çalışmaya devam eder; kimlik uçları `503 phatsa_not_configured`, sağlık kontrolü `authConfigured:false` döner. API örnekleri, ortam ayarları ve test kapsamı: [kimlik servisi belgesi](minigames_backend/README.md).
+
+Açılış ekranında **Misafir**, **Giriş Yap**, **Kayıt Ol** seçenekleri vardır. Kayıt doğrulama gerektiriyorsa kullanıcı e-postaya yönlendirilir; doğrulama e-postası yeniden gönderilebilir. Phatsa'nın uygulama adresi Minigames origin'i olduğunda `/verify-email?token=…` bağlantısı desteklenir; token adres çubuğundan hemen kaldırılır ve Referer başlığında gönderilmez. Şifre alanı işlemden sonra temizlenir.
+
+Oturum bu sekmenin `sessionStorage` alanında saklanır; sayfa yenilenince `/me` ile doğrulanır. Refresh token yenilemeleri aynı sekmede tek istekte birleştirilir. Hesap başına yerel profil/istatistik ayrıdır; misafir verileri hesaba aktarılmaz. Çıkış sunucudaki mevcut oturumu kapatır, tarayıcıdaki tokenları siler ve oyuncuyu odadan çıkarır. Bağlantı kesintisinde uzak çıkış başarısız olursa kullanıcıya bildirilir.
+
+Oyun sunucusu hesaplı oda katılımında tokenı kimlik servisinden doğrular; istemcinin gönderdiği kullanıcı kimliği/rolü yetki sayılmaz. Doğrulanmış hesap kimliği yalnız sunucuda tutulur, diğer oyunculara e-posta veya token gönderilmez. Oyun oturumunun doğrulaması en fazla beş dakika geçerlidir (token daha önce bitiyorsa daha kısa); istemci en geç dört dakikada tokenı yenileyip yeniden doğrulatır. Süresi dolan veya reddedilen oyun oturumu odadan çıkarılır. Phatsa'da dışarıdan iptal edilen bir oturum oyun sunucusunda sonraki doğrulamada fark edilir. Bağımsız socket servisinde `AUTH_SERVICE_URL` kullanılabilir; yerel çalıştırıcı ve Docker bunu otomatik ayarlar.
+
+## Docker
+
+```sh
+docker compose up --build -d
+docker compose ps
+docker compose logs --tail 50
+docker compose down
 ```
 
----
+Varsayılan adres yine **http://localhost:8080**. Başka port için `.env.example` dosyasını `.env` olarak kopyalayıp `WEB_PORT` değerini ayarlayın. Yalnız web servisi dışarı açılır; API ve WebSocket servisleri Docker ağı içinde kalır. API ve oyun sunucusu sağlıklı olmadan web başlamaz. Node servisleri `node` kullanıcısıyla çalışır. `socket_data` birimi oyun ayarlarını saklar; aktif maçlar ve odalar RAM'dedir.
 
-## 📄 Lisans
+İnternet yayını için alan adı ve TLS sonlandırması sağlayan bir ters vekil gerekir. `ALLOWED_ORIGINS=https://oyun.example.com` biçiminde kesin tarayıcı origin'i tanımlanabilir; birden fazlası virgülle ayrılır. Boş bırakıldığında Origin ile gelen Host eşleşmelidir. Vekil dış host ve portu korumalıdır. `TRUST_PROXY=1`, yalnız doğrudan erişilemeyen ve `X-Real-IP` başlığını kendisi yazan vekilin arkasında kullanılmalıdır; Compose bunu dahili ağda uygular.
 
-Bu proje [MIT Lisansı](LICENSE) altında lisanslanmıştır. Dilediğiniz gibi geliştirebilir, özelleştirebilir ve yayınlayabilirsiniz.
+## Oyunlar
+
+| Mod | Temel akış | Oyuncu gereksinimi |
+| --- | --- | --- |
+| Disk Futbolu | Şut, top tutma, takım seçimi, iki devre ve skor | Tek kişi antrenman; rakip için 2+ |
+| Sumo | Dash, daralan arena, eleme ve sonraki tur | Rekabetçi tur için 2+ |
+| Agar | Yem toplama/atma, bölünme, birleşme, rakip yutma | Tek kişi veya çok oyunculu |
+| Uzay Casusu | Görevler, casus, havalandırma, sabotaj, rapor ve oylama | Tek kişi antrenman; sosyal maç 4–15 oyuncu |
+| Vampir Köylü | Gizli rol, gece eylemi, gündüz tartışması, mahkeme | En az 3; Avcı 6+ oyuncuda |
+| Bil ve Fethet | Sayısal tahmin, sonuç sıralaması, şehir seçimi | 1–8; rekabet için 2+ |
+
+Uzay Casusu'nda uzay gemisi, kale ve malikâne haritaları vardır. Kale ve malikânedeki temalı görevler ortak eşleştirme panelini kullanır. Oda kurucusu oyunu başlatabilir/durdurabilir; bekleme aşamasında oyuncular başlatma oyu verebilir. Devam eden gizli rol veya fetih maçına gelen kişi sonraki maça kadar izleyicidir.
+
+Casus görevleri, tek kişilik antrenmanda da **Oyunu Başlat** düğmesinden sonra yapılabilir. Elektrik/jeneratör odasına kafeteryanın sol koridorundan aşağı inerek ulaşılır; haritada sarı kesikli yol gösterilir. Duvarlar ve kapalı kapılar görüşü keser. Normal görüş mürettebatta 300, casusta 380 dünya birimidir; elektrik kesilince sırasıyla 120 ve 320 olur. Görüş dışında kalan oyuncuların konumu istemciye gönderilmez. Toplantılarda kendine oy verilemez. Maç bitince bütün katılımcıların kazanan/kaybeden durumu tabloda gösterilir; sonuçlar oda sahibi yeni maçı başlatana kadar korunur.
+
+Futbolda kurucunun **Maçı Bitir** eylemi mevcut skoru koruyarak kırmızı/mavi takım sonuç ekranını açar. Süre dolunca da aynı ekran gösterilir; eşit skor beraberliktir. Futbol ve Casus sonuçlarında kazanan kadro yan yana poz verir; konfeti, takım renkleri ve WINNER/LOSER tablosu kullanılır. Hareket azaltma tercihi açıkken konfeti gösterilmez.
+
+Casus'ta tek bir görev veya tek bir oyuncunun görevlerini bitirmesi zafer değildir: yaşayan ve ölü mürettebatın ortak görev barı tamamlanmalı veya tüm casuslar elenmelidir. Yaşayan casuslar mürettebat sayısına ulaşırsa casuslar kazanır. Kritik reaktör sabotajı 30 saniyede onarılmazsa da casuslar kazanır; reaktördeki iki farklı panelde iki yaşayan oyuncu aynı anda **E** tuşunu veya onarım düğmesini basılı tutmalıdır. Elektrik kesintisi jeneratör onarılana kadar sürer. Aktif sabotajda acil toplantı butonu kullanılamaz; ceset bildirimi yapılabilir. Tek kişilik antrenman görevlerle zafer/mağlubiyet üretmez. Temel takım hedefleri [resmî Among Us açıklaması](https://www.innersloth.com/games/among-us/) ile uyumludur; ürün tüm Among Us harita/rol/içeriklerinin kopyası değildir.
+
+Casus oyuncularına boş paletten rastgele renk verilir. Lobideki **Renk Seç** panelinden boş bir renk seçilebilir veya tekrar rastgele atanabilir; seçim maç sırasında kilitlidir. Kablo görevinde eşleşen uçlar fareyle/dokunarak sürüklenir veya sırayla seçilir; bağlantılar kablo çizgisi olarak görünür. Yalnız E'yi basılı tutarak görev atlama kaldırılmıştır.
+
+Özel oda genel listede görünmez. Oyun menüsündeki **Oda Davetini Kopyala** düğmesi `?room=...` bağlantısı üretir. Bağlantıyı alan kişi profil ekranından lobiye geçince odaya katılır. Bağlantıya sahip herkes katılabilir; parola korumalı hesap yetkilendirmesi yoktur. Özel odanın son oyuncusu ayrıldığında oda silinir.
+
+## Kontroller
+
+| Eylem | Kontrol |
+| --- | --- |
+| Hareket | WASD / yön tuşları; mobilde joystick |
+| Futbolda şut / Sumo dash / Agar bölünme | Boşluk / sol tık |
+| Futbolda top tutma / Agar yem atma | E / F / Shift / sağ tık |
+| Uzay görevi | İstasyona yaklaş, E/F ile paneli aç ve işlemi tamamla |
+| Casus saldırısı | Q; yakın hedef ve dolmuş bekleme süresi gerekir |
+| Havalandırma | Yakınında V ile gir/çık; içeride WASD/yön tuşları veya oda düğmeleriyle geçiş yap |
+| Ceset bildirimi / acil toplantı | Ceset veya merkez butonu yakınında R |
+| Uzay haritası / sabotaj | M / B |
+| Menü / sohbet | ESC / Enter |
+| Vampir eylemleri ve fetih | Panelde hedef/cevap seç; fetih sırasında haritaya tıkla |
+
+Mobilde ilgili modun dokunmatik düğmeleri kullanılır. Sohbete veya cevap alanına yazarken hareket girdisi gönderilmez.
+
+## Doğrulama
+
+```sh
+npm run check
+npm test
+npm run test:browser
+npm run test:load
+npm run audit:all
+```
+
+Çalışmakta olan yerel/Docker dağıtımını HTTP ve gerçek WebSocket üzerinden sınamak için `npm run test:deployment -- http://localhost:8080` kullanılabilir.
+
+`npm test`, fizik, maç akışları, üç uzay haritasının erişilebilirliği, rol gizliliği, HTTP ve gerçek WebSocket protokolünü sınar. `test:browser`, Playwright ile gerçek arayüz işlemlerini sınar. Windows'ta kurulu Microsoft Edge kullanılır. Diğer sistemlerde önce `npx playwright install chromium` çalıştırın; `PLAYWRIGHT_CHANNEL` ile kanal değiştirilebilir. Tarayıcı testleri 14000/15050/18080 portlarını kullanır; bu portların boş olması gerekir. Başarısız test görüntüleri ve iz kayıtları `test-results/` altında oluşur.
+
+`test:load`, yerel ortamda 24 bağlantıyla altı modun veri iletimini kısa süre ölçer; üretim kapasitesi ölçümü değildir. Testler görev konumlarını ve aşama zamanlarını yalnız test sürecindeki sunucu nesneleri üzerinden ayarlar; uygulamada bunun için yönetim API'si yoktur.
+
+Casus haritaları, karakterler, görev işaretleri, jeneratör, kapılar ve menfezler PNG dosyalarından çizilir; WebGL ve Canvas2D aynı varlıkları kullanır. Harita geometrisi değişirse `npm run assets:space` ile `web/assets/space/png/` dosyalarını yeniden üretin. Bu komut da tarayıcı testleriyle aynı Edge/Chromium kurulumunu kullanır.
+
+## Yapı ve kapsam
+
+- `web/`: arayüz, oyun istemcileri, yerel PIXI ve çizim.
+- `socket/`: odalar, fizik, modlar, alıcıya özel durum paketleri ve bağlantı sınırları.
+- `backend/`: salt okunur `/api/health`, `/api/modes`, `/api/config`.
+- `scripts/`: yerel çalıştırıcı, HTTP/WS geçidi, sözdizimi ve yük kontrolü.
+- `tests/`: otomatik regresyon testleri.
+
+Phatsa ile gerçek hesap girişi ve oyun bağlantısında hesap doğrulaması vardır. XP, avatar ve geçmiş istatistikler hesap başına bu tarayıcının `localStorage` alanındadır; cihazlar arası ilerleme ve doğrulanmış kalıcı sıralama uygulanmamıştır. Maç içindeki skor ve yetkiler oyun sunucusundan gelir. Kaynak depoda uygulamaya ait lisans dosyası bulunmadığından MIT lisanslı olduğu iddiası kaldırılmıştır; dağıtım lisansını proje sahibi belirlemelidir.
+
+Tespitler, düzeltmeler ve doğrulama sınırları: [AUDIT.md](AUDIT.md).

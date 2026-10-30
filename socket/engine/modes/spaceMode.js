@@ -2,6 +2,15 @@ import { Vec2, resolveCircleCollision, resolveSegmentCollision } from '../physic
 import { configDb } from '../../db/configDb.js';
 import { BaseMode } from './BaseMode.js';
 import { mapRegistry } from './maps/mapRegistry.js';
+import { hasSight } from '../spaceVision.js';
+
+export const SPACE_COLORS = [
+  ['Kırmızı','#ef4444'],['Mavi','#2563eb'],['Yeşil','#16a34a'],['Pembe','#ec4899'],
+  ['Turuncu','#f97316'],['Sarı','#facc15'],['Siyah','#374151'],['Beyaz','#e2e8f0'],
+  ['Mor','#9333ea'],['Kahverengi','#92400e'],['Turkuaz','#22d3ee'],['Limon','#a3e635'],
+  ['Bordo','#9f1239'],['Gül','#fda4af'],['Muz','#fef08a'],['Gri','#94a3b8'],
+  ['Kum','#d6b98c'],['Mercan','#fb7185']
+].map(([name,color])=>({name,color}));
 
 export class SpaceMode extends BaseMode {
   constructor(room, options = {}) {
@@ -20,6 +29,8 @@ export class SpaceMode extends BaseMode {
     this.meetingDuration = 30; // 30 seconds voting
     this.ejectedPlayer = null;
     this.winner = null; // 'crew' or 'impostor'
+    this.result = null;
+    this.matchRoster = [];
 
     this.totalTasks = 0;
     this.completedTasks = 0;
@@ -52,28 +63,34 @@ export class SpaceMode extends BaseMode {
     this.corridors = mapData.corridors;
     this.vents = mapData.vents;
     this.taskStations = mapData.taskStations;
+    this.generator = { x: this.taskStations[0].x, y: this.taskStations[0].y - 90, room: this.taskStations[0].room };
+    this.reactorPanels = [{id:'reactor_a',x:-1035,y:-140},{id:'reactor_b',x:-795,y:-140}];
   }
 
   onPlayerJoin(player) {
+    this.chooseColor(player, null);
     player.radius = 18;
     player.mass = 2.5;
     player.damping = 0.92;
     player.restitution = 0.4;
     player.isAlive = true;
-    player.isSpectator = false;
+    player.isSpectator = !['waiting', 'game_over'].includes(this.gameState);
     player.role = 'crew'; // 'crew' or 'impostor'
     player.killCooldown = 18; // 18 seconds
     player.lastKillTime = Date.now();
     player.isVented = false;
     player.ventId = null;
+    player.ventDirection = null;
     player.currentTask = null;
     player.isDoingTask = false;
     player.taskProgress = 0;
+    player.previousVentInput = {};
     player.completedTasksList = [];
 
     // Spawn at Cafeteria Table
     this.spawnAtCafeteria(player);
 
+    if (player.isSpectator) return;
     if (this.gameState === 'playing' || this.gameState === 'meeting') {
       // If a match is already ongoing, check if there are active impostors
       const hasImpostor = Array.from(this.room.players.values()).some(p => p.id !== player.id && p.role === 'impostor');
@@ -100,7 +117,7 @@ export class SpaceMode extends BaseMode {
       }
     }
     // Remove dead body of this player if left on map
-    this.bodies = this.bodies.filter(b => b.id !== player.id);
+    this.bodies = this.bodies.filter(b => b.playerId !== player.id);
 
     // Recalculate tasks and win conditions
     this.recalculateTaskProgress();
@@ -115,13 +132,24 @@ export class SpaceMode extends BaseMode {
     player.pos.set(Math.cos(angle) * dist, Math.sin(angle) * dist);
     player.vel.set(0, 0);
     player.isVented = false;
+    player.ventId = null;
+    player.ventDirection = null;
+    player.previousVentInput = {};
     player.isDoingTask = false;
+    player.currentTask = null;
     player.taskProgress = 0;
   }
 
   startMatch(callerName = 'Host') {
+    if (this.room.players.size > 1 && this.room.players.size < 4) {
+      this.room.broadcastChat('Sistem','Sosyal maç için en az 4 oyuncu gerekir. Tek kişi görev antrenmanı yapabilir.','#facc15');
+      return;
+    }
+    this.cancelTimers();
     this.gameState = 'playing';
     this.winner = null;
+    this.result = null;
+    this.lastMeetingAt = 0;
     this.bodies = [];
     this.votes.clear();
     this.meetingReason = '';
@@ -144,8 +172,9 @@ export class SpaceMode extends BaseMode {
       });
     }
 
-    const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
+    const players = Array.from(this.room.players.values());
     players.forEach(p => {
+      p.isSpectator = false;
       p.isAlive = true;
       p.isVented = false;
       p.ventId = null;
@@ -156,6 +185,8 @@ export class SpaceMode extends BaseMode {
     });
 
     this.checkRolesDistribution();
+    this.matchRoster = players.map(p => ({ id: p.id, name: p.name, color: p.color, avatar: p.avatar, role: p.role }));
+    this.soloPractice = players.length === 1;
     this.recalculateTaskProgress();
 
     this.room.broadcastEvent({
@@ -181,10 +212,11 @@ export class SpaceMode extends BaseMode {
     const impostorCount = players.length >= 7 ? 2 : 1;
     // Assign random Impostor
     players.forEach(p => p.role = 'crew');
-    const shuffled = [...players].sort(() => Math.random() - 0.5);
+    const shuffled = [...players];
+    for (let i=shuffled.length-1;i>0;i--) {const j=Math.floor(Math.random()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
     for (let i = 0; i < impostorCount; i++) {
       shuffled[i].role = 'impostor';
-      shuffled[i].lastKillTime = Date.now() + 5000; // 5s initial cooldown
+      shuffled[i].lastKillTime = Date.now() - (shuffled[i].killCooldown - 5) * 1000;
     }
 
     this.recalculateTaskProgress();
@@ -204,46 +236,35 @@ export class SpaceMode extends BaseMode {
     this.completedTasks = completed;
   }
 
-  handlePlayerInput(player) {
-    if (!player.input || !player.isAlive || player.isSpectator) return;
+  chooseColor(player, requested) {
+    const used = new Set([...this.room.players.values()].filter(p=>p.id!==player.id).map(p=>p.color));
+    const free = SPACE_COLORS.filter(c=>!used.has(c.color));
+    if (requested !== null) {
+      if (!free.some(c=>c.color===requested) && requested!==player.color) return;
+      if (!SPACE_COLORS.some(c=>c.color===requested)) return;
+      player.color=requested;
+    } else {
+      const available=free.length?free:SPACE_COLORS;
+      player.color=available[Math.floor(Math.random()*available.length)].color;
+    }
+  }
+
+  handlePlayerInput(player, dt = 1 / 60) {
+    if (!player.input || player.isSpectator || !['waiting', 'playing'].includes(this.gameState)) return;
     const now = Date.now();
 
-    // 1. USE / TASK INTERACTION -> 'KeyE' or 'hold' / 'use'
-    if (player.input.hold || player.input.use) {
-      if (player.role === 'crew' && !player.isVented) {
-        // Check nearest task station
-        for (const task of this.taskStations) {
-          const dist = Math.hypot(player.pos.x - task.x, player.pos.y - task.y);
-          if (dist < 45 && !player.completedTasksList.includes(task.id)) {
-            player.taskProgress = (player.taskProgress || 0) + 0.025;
-            if (player.taskProgress >= 1.0) {
-              player.completedTasksList.push(task.id);
-              player.taskProgress = 0;
-              this.recalculateTaskProgress();
-              this.room.broadcastEvent({
-                type: 'sfx_task_complete',
-                playerId: player.id,
-                taskName: task.name
-              });
-              this.checkWinConditions();
-            }
-            break;
-          }
-        }
-      }
-    } else {
-      player.taskProgress = 0;
-    }
+    // Tasks complete through their validated start/complete actions, never by holding E.
+    if (!player.isAlive) return;
 
     // 2. KILL MECHANIC (Impostor only) -> 'kick' or 'kill'
     if (player.input.kick && player.role === 'impostor' && !player.isVented && this.gameState === 'playing') {
       const cdElapsed = (now - player.lastKillTime) / 1000;
       if (cdElapsed >= player.killCooldown) {
         // Find nearest alive crewmate
-        const players = Array.from(this.room.players.values()).filter(p => p.id !== player.id && p.isAlive && !p.isSpectator && !p.isVented);
+        const players = Array.from(this.room.players.values()).filter(p => p.id !== player.id && p.role === 'crew' && p.isAlive && !p.isSpectator && !p.isVented);
         for (const target of players) {
           const dist = Math.hypot(player.pos.x - target.pos.x, player.pos.y - target.pos.y);
-          if (dist < 60) {
+          if (dist < 60 && this.hasLineOfSight(player.pos, target.pos)) {
             // Kill target!
             target.isAlive = false;
             player.lastKillTime = now;
@@ -251,6 +272,7 @@ export class SpaceMode extends BaseMode {
             // Leave Dead Body
             this.bodies.push({
               id: 'body_' + Math.random().toString(36).substring(2, 8),
+              playerId: target.id,
               x: target.pos.x,
               y: target.pos.y,
               color: target.color,
@@ -275,51 +297,10 @@ export class SpaceMode extends BaseMode {
       }
     }
 
-    // 3. VENT MECHANIC (Impostor only) -> 'vent' or 'KeyV'
-    if (player.input.vent && player.role === 'impostor' && this.gameState === 'playing') {
-      if (!player.lastVentToggle || now - player.lastVentToggle > 500) {
-        player.lastVentToggle = now;
-        if (!player.isVented) {
-          // Enter nearest vent
-          for (const vent of this.vents) {
-            const dist = Math.hypot(player.pos.x - vent.x, player.pos.y - vent.y);
-            if (dist < 50) {
-              player.isVented = true;
-              player.ventId = vent.id;
-              player.pos.set(vent.x, vent.y);
-              player.vel.set(0, 0);
-              this.room.broadcastEvent({ type: 'sfx_vent', x: vent.x, y: vent.y });
-              break;
-            }
-          }
-        } else {
-          // Exit or cycle vent
-          const curVent = this.vents.find(v => v.id === player.ventId);
-          if (curVent && curVent.connectsTo && curVent.connectsTo.length > 0) {
-            // If movement direction pressed, jump to connected vent
-            if (player.input.left || player.input.right || player.input.up || player.input.down) {
-              const nextId = curVent.connectsTo[Math.floor(Math.random() * curVent.connectsTo.length)];
-              const nextVent = this.vents.find(v => v.id === nextId);
-              if (nextVent) {
-                player.ventId = nextVent.id;
-                player.pos.set(nextVent.x, nextVent.y);
-                this.room.broadcastEvent({ type: 'sfx_vent', x: nextVent.x, y: nextVent.y });
-              }
-            } else {
-              // Exit vent
-              player.isVented = false;
-              player.ventId = null;
-              this.room.broadcastEvent({ type: 'sfx_vent', x: player.pos.x, y: player.pos.y });
-            }
-          } else {
-            player.isVented = false;
-          }
-        }
-      }
-    }
+    this.handleVentInput(player, now);
 
     // 4. REPORT BODY OR EMERGENCY BUTTON -> 'report' or 'KeyR'
-    if (player.input.report && this.gameState === 'playing') {
+    if (player.input.report && !player.isVented && this.gameState === 'playing') {
       // Check emergency button at cafeteria (0, 0)
       const distToButton = Math.hypot(player.pos.x, player.pos.y);
       let canReport = distToButton < 65;
@@ -335,7 +316,7 @@ export class SpaceMode extends BaseMode {
         }
       }
 
-      if (canReport) {
+      if (canReport && (reportedBody || !this.sabotage.active)) {
         const callerName = (player && player.name) ? player.name : 'Bir Oyuncu';
         this.startEmergencyMeeting(callerName, reportedBody ? `Ceset Bulundu: ${reportedBody.name}` : 'Acil Durum Butonuna Basıldı!');
       }
@@ -345,6 +326,9 @@ export class SpaceMode extends BaseMode {
   handleAction(playerId, actionData) {
     if (!actionData) return;
 
+    if (actionData.type === 'stop_match' || (actionData.type === 'toggle_match' && !['waiting', 'game_over'].includes(this.gameState))) {
+      this.resetGame(); return;
+    }
     if (actionData.type === 'start_match' || actionData.type === 'start_game' || actionData.type === 'restart_match' || actionData.type === 'toggle_match') {
       const player = this.room.players.get(playerId);
       const callerName = player ? player.name : 'Host';
@@ -355,29 +339,45 @@ export class SpaceMode extends BaseMode {
     const player = this.room.players.get(playerId);
     if (!player) return;
 
+    if (actionData.type === 'choose_color') {
+      if (['waiting','game_over'].includes(this.gameState)) this.chooseColor(player,actionData.color===null?null:actionData.color);
+      return;
+    }
+
     if (actionData.type === 'start_task') {
+      const station = this.taskStations.find(s => s.id === actionData.taskId);
+      if (!this.canDoTask(player, station)) return;
       player.isDoingTask = true;
+      player.currentTask = station.id;
+      player.taskStartedAt = Date.now();
       player.vel.set(0, 0);
       return;
     }
 
     if (actionData.type === 'stop_task') {
       player.isDoingTask = false;
+      player.currentTask = null;
       return;
     }
 
+    if (actionData.type === 'vent_travel') { this.travelVent(player, actionData.targetId); return; }
+    if (actionData.type === 'vent_exit') { this.exitVent(player); return; }
+
     if (actionData.type === 'sabotage') {
       if (player.role !== 'impostor' || !player.isAlive || player.isSpectator || this.gameState !== 'playing') return;
-      if (this.sabotage.cooldown > 0) return;
+      if (this.sabotage.cooldown > 0 || this.sabotage.active) return;
 
       const sType = actionData.sabotageType;
 
-      if (sType === 'lights') {
+      if (sType === 'reactor') {
+        this.sabotage={type:'reactor',active:true,timer:30,duration:30,cooldown:40,repairCount:0};
+        this.room.broadcastEvent({type:'sabotage_start',sabotageType:'reactor',message:'Reaktör kritik! İki panelde aynı anda E tuşunu basılı tutun.'});
+      } else if (sType === 'lights') {
         this.sabotage = {
           type: 'lights',
           active: true,
-          timer: 20,
-          duration: 20,
+          timer: 0,
+          duration: 0,
           cooldown: 25
         };
 
@@ -415,6 +415,8 @@ export class SpaceMode extends BaseMode {
     }
 
     if (actionData.type === 'fix_sabotage') {
+      const station = this.generator;
+      if (!player.isAlive || player.isSpectator || player.isVented || this.gameState !== 'playing' || !station || Math.hypot(player.pos.x - station.x, player.pos.y - station.y) > 120 || !this.hasLineOfSight(player.pos,station)) return;
       if (this.sabotage.active && this.sabotage.type === 'lights') {
         this.sabotage.active = false;
         this.sabotage.type = null;
@@ -435,20 +437,19 @@ export class SpaceMode extends BaseMode {
     } else if (actionData.type === 'complete_task') {
       this.completeTask(playerId, actionData.taskId);
     } else if (actionData.type === 'emergency_meeting' || actionData.type === 'report') {
-      if (player && player.isAlive && !player.isSpectator && this.gameState === 'playing') {
-        const callerName = player.name || 'Bir Oyuncu';
-        this.startEmergencyMeeting(callerName, 'Acil Durum Butonuna Basıldı!');
+      if (player.isAlive && !player.isSpectator && !player.isVented && this.gameState === 'playing') {
+        const body = this.bodies.find(b => Math.hypot(player.pos.x - b.x, player.pos.y - b.y) < 75);
+        if (body || (!this.sabotage.active && Math.hypot(player.pos.x, player.pos.y) < 65)) this.startEmergencyMeeting(player.name, body ? `Ceset Bulundu: ${body.name}` : 'Acil Durum Butonuna Basıldı!');
       }
     }
   }
 
   completeTask(playerId, taskId) {
     const player = this.room.players.get(playerId);
-    if (!player || player.isSpectator) return;
-    player.isDoingTask = false;
-
     const station = this.taskStations.find(s => s.id === taskId);
-    if (!station) return;
+    if (!this.canDoTask(player, station) || !player.isDoingTask || player.currentTask !== taskId || Date.now() - player.taskStartedAt < station.duration * 1000) return;
+    player.isDoingTask = false;
+    player.currentTask = null;
 
     if (!player.completedTasksList) {
       player.completedTasksList = [];
@@ -468,24 +469,14 @@ export class SpaceMode extends BaseMode {
         y: station.y
       });
 
-      if (this.totalTasks > 0 && this.completedTasks >= this.totalTasks) {
-        if (this.gameState === 'playing') {
-          this.checkWinConditions();
-        } else {
-          this.room.broadcastEvent({
-            type: 'game_over',
-            winner: 'crew',
-            message: '🛠️ MÜRETTEBAT ZAFERİ! Tüm Görevler Tamamlandı!'
-          });
-          this.room.broadcastChat('Sistem', '🎉 Tebrikler! Tüm görevler %100 tamamlandı! Maçta bu durumda Mürettebat doğrudan ZAFER kazanır.', '#10b981');
-        }
-      } else if (this.gameState === 'playing') {
-        this.checkWinConditions();
-      }
+      this.checkWinConditions();
     }
   }
 
   startEmergencyMeeting(reporterName, reason) {
+    if (Date.now() - (this.lastMeetingAt || 0) < 15000) return;
+    this.lastMeetingAt = Date.now();
+    if (this.sabotage.type==='reactor') {this.sabotage.active=false;this.sabotage.type=null;this.sabotage.timer=0;}
     this.gameState = 'meeting';
     const finalReporter = reporterName || 'Bir Oyuncu';
     this.meetingReason = reason || 'Acil Durum Toplantısı!';
@@ -512,6 +503,9 @@ export class SpaceMode extends BaseMode {
     if (this.gameState !== 'meeting') return;
     const voter = this.room.players.get(voterId);
     if (!voter || !voter.isAlive || voter.isSpectator) return;
+    if (targetId === voterId) return;
+    const target = this.room.players.get(targetId);
+    if (targetId !== 'skip' && (!target || !target.isAlive || target.isSpectator)) return;
 
     this.votes.set(voterId, targetId);
 
@@ -588,56 +582,88 @@ export class SpaceMode extends BaseMode {
     this.checkWinConditions();
   }
 
+  finishGame(winner, reason) {
+    if (this.gameState === 'game_over') return;
+    this.sabotage.active=false;this.sabotage.type=null;this.sabotage.timer=0;
+    this.winner = winner;
+    this.gameState = 'game_over';
+    this.result = {
+      id: this.room.id + ':' + Date.now(), winner, reason,
+      players: this.matchRoster.map(entry => {
+        const p = this.room.players.get(entry.id);
+        return { ...entry, outcome: entry.role === winner ? 'winner' : 'loser',
+          isAlive: p?.isAlive ?? false, disconnected: !p,
+          tasks: p?.completedTasksList?.length || 0 };
+      })
+    };
+    for (const p of this.room.players.values()) { p.vel.set(0,0); p.isDoingTask=false; p.taskProgress=0; }
+    this.room.broadcastEvent({ type: 'game_over', winner, message: reason });
+  }
+
   checkWinConditions() {
-    const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
-    if (players.length < 2 && this.completedTasks < this.totalTasks) return;
-
-    const aliveCrew = players.filter(p => p.isAlive && p.role === 'crew');
-    const aliveImpostors = players.filter(p => p.isAlive && p.role === 'impostor');
-
-    // 1. Crew wins by ejecting all impostors
-    if (aliveImpostors.length === 0) {
-      this.winner = 'crew';
-      this.gameState = 'game_over';
-      this.room.broadcastEvent({
-        type: 'game_over',
-        winner: 'crew',
-        message: '🎉 MÜRETTEBAT KAZANDI! Tüm Casuslar Uzaya Fırlatıldı!'
-      });
-      setTimeout(() => this.resetGame(), 5000);
-      return;
+    if (!['playing', 'meeting'].includes(this.gameState)) return;
+    // Practice has no opponent and never awards a competitive win/loss.
+    if (this.soloPractice) return;
+    const players = [...this.room.players.values()].filter(p => !p.isSpectator);
+    if (this.totalTasks > 0 && this.completedTasks >= this.totalTasks && !(this.sabotage.active && this.sabotage.type==='reactor')) {
+      this.finishGame('crew', 'Tüm görevler tamamlandı.'); return;
     }
+    const crew = players.filter(p => p.isAlive && p.role === 'crew');
+    const impostors = players.filter(p => p.isAlive && p.role === 'impostor');
+    if (!impostors.length) this.finishGame('crew', 'Tüm casuslar elendi.');
+    else if (impostors.length >= crew.length) this.finishGame('impostor', 'Casuslar geminin kontrolünü ele geçirdi.');
+  }
 
-    // 2. Crew wins by completing all tasks
-    if (this.totalTasks > 0 && this.completedTasks >= this.totalTasks) {
-      this.winner = 'crew';
-      this.gameState = 'game_over';
-      this.room.broadcastEvent({
-        type: 'game_over',
-        winner: 'crew',
-        message: '🛠️ MÜRETTEBAT KAZANDI! Tüm Görevler Tamamlandı!'
-      });
-      setTimeout(() => this.resetGame(), 5000);
-      return;
-    }
-
-    // 3. Impostors win if they equal or outnumber crew
-    if (aliveImpostors.length >= aliveCrew.length) {
-      this.winner = 'impostor';
-      this.gameState = 'game_over';
-      this.room.broadcastEvent({
-        type: 'game_over',
-        winner: 'impostor',
-        message: '🔪 CASUSLAR KAZANDI! Gemi Ele Geçirildi!'
-      });
-      setTimeout(() => this.resetGame(), 5000);
-      return;
+  handleVentInput(player, now) {
+    if (player.role !== 'impostor' || !player.isAlive || player.isSpectator || this.gameState !== 'playing') return;
+    const keys=player.input, previous=player.previousVentInput || {};
+    const ventPressed=keys.vent && !previous.vent;
+    const dx=Number(!!keys.right)-Number(!!keys.left), dy=Number(!!keys.down)-Number(!!keys.up);
+    const direction=dx+','+dy;
+    if(!dx&&!dy) player.ventDirection=null;
+    player.previousVentInput={...keys};
+    if (ventPressed) {
+      if (player.isVented) this.exitVent(player,now);
+      else {
+        const vent=this.vents.find(v=>Math.hypot(player.pos.x-v.x,player.pos.y-v.y)<50 && this.hasLineOfSight(player.pos,v));
+        if (vent && now-(player.lastVentToggle||0)>=450) {
+          player.isVented=true; player.ventId=vent.id; player.lastVentToggle=now; player.ventDirection=null;
+          player.pos.set(vent.x,vent.y); player.vel.set(0,0);
+          this.room.broadcastEvent({type:'sfx_vent',x:vent.x,y:vent.y});
+        }
+      }
+    } else if (player.isVented && (dx||dy) && player.ventDirection!==direction && now-(player.lastVentToggle||0)>=450) {
+      const vent=this.vents.find(v=>v.id===player.ventId);
+      const options=(vent?.connectsTo||[]).map(id=>this.vents.find(v=>v.id===id)).filter(Boolean);
+      options.sort((a,b)=>((b.x-vent.x)*dx+(b.y-vent.y)*dy)/Math.hypot(b.x-vent.x,b.y-vent.y)-((a.x-vent.x)*dx+(a.y-vent.y)*dy)/Math.hypot(a.x-vent.x,a.y-vent.y));
+      if(options[0]) {this.travelVent(player,options[0].id,now);player.ventDirection=direction;}
     }
   }
 
+  travelVent(player, targetId, now=Date.now()) {
+    if(this.gameState!=='playing'||!player.isAlive||player.isSpectator||player.role!=='impostor'||!player.isVented||now-(player.lastVentToggle||0)<450) return;
+    const current=this.vents.find(v=>v.id===player.ventId), target=this.vents.find(v=>v.id===targetId);
+    if(!target||!current?.connectsTo.includes(targetId)) return;
+    player.ventId=target.id; player.pos.set(target.x,target.y); player.vel.set(0,0); player.lastVentToggle=now;
+    this.room.broadcastEvent({type:'sfx_vent',x:target.x,y:target.y});
+  }
+
+  exitVent(player, now=Date.now()) {
+    if(this.gameState!=='playing'||!player.isAlive||player.isSpectator||player.role!=='impostor'||!player.isVented||now-(player.lastVentToggle||0)<450) return;
+    player.isVented=false; player.ventId=null; player.lastVentToggle=now;
+    this.room.broadcastEvent({type:'sfx_vent',x:player.pos.x,y:player.pos.y});
+  }
+
   resetGame() {
+    this.cancelTimers();
+    this.phaseTimer = 0;
     this.gameState = 'waiting';
     this.winner = null;
+    this.result = null;
+    this.soloPractice = false;
+    this.matchRoster = [];
+    this.sabotage = {type:null,active:false,timer:0,duration:0,cooldown:0};
+    for(const door of this.doors) {door.isLocked=false;door.lockTimer=0;}
     this.completedTasks = 0;
     this.bodies = [];
     this.votes.clear();
@@ -645,6 +671,7 @@ export class SpaceMode extends BaseMode {
 
     const players = Array.from(this.room.players.values());
     players.forEach(p => {
+      p.isSpectator = false;
       p.isAlive = true;
       p.isVented = false;
       p.ventId = null;
@@ -659,6 +686,7 @@ export class SpaceMode extends BaseMode {
   }
 
   update(dt, secTimerTick) {
+    if (this.gameState === 'game_over') return;
     if (this.gameState === 'meeting') {
       this.meetingTimer -= dt;
       if (this.meetingTimer <= 0) {
@@ -669,12 +697,23 @@ export class SpaceMode extends BaseMode {
 
     // Update Sabotage Timers
     if (this.sabotage) {
+      if (this.sabotage.active && this.sabotage.type==='reactor') {
+        const holders=[...this.room.players.values()].filter(p=>p.isAlive&&!p.isSpectator&&!p.isVented&&p.input?.hold);
+        const occupied=this.reactorPanels.map(panel=>holders.find(p=>Math.hypot(p.pos.x-panel.x,p.pos.y-panel.y)<85&&this.hasLineOfSight(p.pos,panel)));
+        this.sabotage.repairCount=occupied.filter(Boolean).length;
+        if (occupied[0]&&occupied[1]&&occupied[0].id!==occupied[1].id) {
+          this.sabotage.active=false;this.sabotage.type=null;this.sabotage.timer=0;
+          this.room.broadcastEvent({type:'sabotage_fixed',sabotageType:'reactor',message:'Reaktör dengelendi.'});
+          this.checkWinConditions();
+        }
+      }
       if (this.sabotage.cooldown > 0) {
         this.sabotage.cooldown = Math.max(0, this.sabotage.cooldown - dt);
       }
       if (this.sabotage.active && this.sabotage.timer > 0) {
         this.sabotage.timer -= dt;
         if (this.sabotage.timer <= 0) {
+          if (this.sabotage.type==='reactor') {this.finishGame('impostor','Kritik reaktör sabotajı zamanında onarılamadı.');return;}
           if (this.sabotage.type === 'lights') {
             this.room.broadcastEvent({
               type: 'sabotage_fixed',
@@ -738,14 +777,18 @@ export class SpaceMode extends BaseMode {
       const p1 = playerList[i];
       if (p1.isSpectator) continue;
 
-      this.handlePlayerInput(p1);
+      this.handlePlayerInput(p1, dt);
 
       if (!p1.isVented) {
+        const previousPosition = {x:p1.pos.x,y:p1.pos.y};
         this.applyPlayerMovement(p1, dt);
         p1.update(dt);
 
         // Wall & Closed Door collisions (only for alive players; dead players/ghosts can float through walls)
         if (p1.isAlive) {
+          if (!this.isWalkable(p1.pos.x,p1.pos.y,p1.radius)) {
+            p1.pos.set(previousPosition.x,previousPosition.y); p1.vel.set(0,0);
+          }
           for (const wall of this.walls) {
             resolveSegmentCollision(p1, wall.p1, wall.p2, 0.4);
           }
@@ -824,6 +867,9 @@ export class SpaceMode extends BaseMode {
       width: this.width,
       height: this.height,
       gameState: this.gameState,
+      soloPractice: !!this.soloPractice,
+      colorPalette: SPACE_COLORS,
+      result: this.result,
       meetingReason: this.meetingReason || 'Acil Durum Toplantısı',
       meetingTimer: Math.ceil(this.meetingTimer),
       totalTasks: this.totalTasks,
@@ -838,6 +884,8 @@ export class SpaceMode extends BaseMode {
       doors: this.doors,
       vents: this.vents,
       taskStations: this.taskStations,
+      generator: this.generator,
+      reactorPanels: this.reactorPanels,
       walls: this.walls.map(w => ({ p1: { x: w.p1.x, y: w.p1.y }, p2: { x: w.p2.x, y: w.p2.y } })),
       playersMeta: playerList.map(p => ({
         id: p.id,
@@ -845,7 +893,10 @@ export class SpaceMode extends BaseMode {
         avatar: p.avatar,
         color: p.color,
         isAlive: p.isAlive,
+        isSpectator: p.isSpectator,
         isVented: p.isVented,
+        ventId: p.ventId,
+        ventCooldownMs: Math.max(0,450-(Date.now()-(p.lastVentToggle||0))),
         isDoingTask: !!p.isDoingTask,
         taskProgress: p.taskProgress || 0,
         role: p.role,
@@ -854,4 +905,21 @@ export class SpaceMode extends BaseMode {
       }))
     };
   }
+
+  canDoTask(player, station) {
+    return !!(player && station && !player.isSpectator && !player.isVented && player.role === 'crew' &&
+      this.gameState === 'playing' && !player.completedTasksList.includes(station.id) &&
+      Math.hypot(player.pos.x - station.x, player.pos.y - station.y) < 80 &&
+      (!player.isAlive || this.hasLineOfSight(player.pos,station)));
+  }
+
+  hasLineOfSight(a, b) {
+    return hasSight(this,a,b);
+  }
+
+  isWalkable(x,y,radius=18) {
+    return [[x,y],[x-radius,y],[x+radius,y],[x,y-radius],[x,y+radius]].every(([px,py]) =>
+      [...this.roomsList,...this.corridors].some(r=>Math.abs(px-r.x)<=r.w/2 && Math.abs(py-r.y)<=r.h/2));
+  }
+
 }

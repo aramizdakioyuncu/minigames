@@ -5,6 +5,8 @@ import { audio } from './audio.js';
 import { UIController } from './ui.js';
 import { clientModeRegistry } from './modes/clientModeRegistry.js';
 import { profileManager } from './auth/profileManager.js';
+import { authClient } from './auth/authClient.js';
+import { AuthUIController } from './ui/authUI.js';
 
 class GameApp {
   constructor() {
@@ -20,6 +22,7 @@ class GameApp {
     });
 
     this.currentRoom = null;
+    this.pendingInvite = new URLSearchParams(location.search).get('room');
     this.lastGameState = null;
     this.fps = 60;
     this.lastFrameTime = performance.now();
@@ -49,6 +52,7 @@ class GameApp {
     this.bindLobbyControls();
     this.bindGameControls();
     this.bindSocketEvents();
+    this.authUI = new AuthUIController(this);
     this.loadGameModes();
 
     // Connect to WebSocket Server
@@ -100,6 +104,7 @@ class GameApp {
 
     // Enter Lobby Button
     this.ui.btnEnterLobby.addEventListener('click', () => {
+      this.accountTransition = false;
       audio.init();
       const rawName = this.ui.inputNickname.value.trim();
       const name = rawName.length > 0 ? rawName : 'Oyuncu_' + Math.floor(Math.random() * 900 + 100);
@@ -109,6 +114,7 @@ class GameApp {
       this.ui.lobbyUserAvatar.textContent = this.profile.avatar;
       this.ui.showView('view-lobby');
       this.socket.send({ type: 'get_rooms' });
+      this.acceptPendingInvite();
     });
   }
 
@@ -238,6 +244,7 @@ class GameApp {
         speedMultiplier: selectedSpeed,
         matchDuration,
         tackleEnabled,
+        isPrivate: document.getElementById('create-room-private')?.checked === true,
         maxPlayers
       });
 
@@ -364,11 +371,25 @@ class GameApp {
     if (this.canvas) {
       this.canvas.addEventListener('click', handleGameAreaClick);
     }
-    if (this.ui.viewGame) {
-      this.ui.viewGame.addEventListener('click', handleGameAreaClick);
-    }
 
     // ESC Menu Controls
+    document.getElementById('btn-copy-invite')?.addEventListener('click', async () => {
+      if (!this.currentRoom) return;
+      const url = new URL(location.href);
+      url.search = '';
+      url.hash = '';
+      url.searchParams.set('room', this.currentRoom.roomId);
+      const field = document.getElementById('room-invite-url');
+      field.value = url.href;
+      field.classList.remove('hidden');
+      try {
+        await navigator.clipboard.writeText(url.href);
+        this.ui.showToast('Davet bağlantısı kopyalandı.');
+      } catch {
+        field.focus(); field.select();
+        this.ui.showToast('Bağlantıyı seçip kopyalayabilirsiniz.');
+      }
+    });
     if (this.ui.btnOpenEscMenu) {
       this.ui.btnOpenEscMenu.addEventListener('click', () => {
         this.ui.toggleEscMenu();
@@ -504,9 +525,14 @@ class GameApp {
       });
     }
 
+    document.getElementById('btn-sabotage-reactor')?.addEventListener('click',()=>{
+      this.socket.sendAction({type:'sabotage',sabotageType:'reactor'});
+      document.getElementById('modal-space-sabotage').classList.add('hidden');
+    });
     const btnFixShortcut = document.getElementById('btn-fix-sabotage-shortcut');
     if (btnFixShortcut) {
       btnFixShortcut.addEventListener('click', () => {
+        if(this.lastGameState?.modeState?.sabotage?.type==='reactor')return;
         this.socket.sendAction({ type: 'fix_sabotage', sabotageType: 'lights' });
       });
     }
@@ -546,7 +572,7 @@ class GameApp {
         return;
       }
 
-      if ((e.code === 'KeyQ') && !this.input.isChatting && this.ui.currentView === 'view-game') {
+      if ((e.code === 'KeyB') && !this.input.isChatting && this.ui.currentView === 'view-game') {
         if (this.lastGameState && this.lastGameState.mode === 'space') {
           const spaceMode = clientModeRegistry.getMode('space');
           if (spaceMode && spaceMode.toggleSabotageModal) {
@@ -602,9 +628,21 @@ class GameApp {
     this.socket.on('onConnect', () => {
       this.ui.setServerStatus(true);
     });
+    this.socket.on('onAuthExpired', () => {
+      authClient.clear();
+      this.ui.showToast('Oturum doğrulanamadı. Tekrar giriş yapmalısın.');
+    });
+    this.socket.on('onError', message => this.ui.showToast(message));
 
     this.socket.on('onDisconnect', () => {
       this.ui.setServerStatus(false);
+      this.input.resetKeys();
+      if (this.currentRoom) {
+        this.currentRoom = null;
+        this.lastGameState = null;
+        this.ui.showView('view-lobby');
+        this.ui.showToast('Bağlantı kesildi. Yeniden bağlanınca odaya tekrar katılabilirsiniz.');
+      }
     });
 
     this.socket.on('onInit', (data) => {
@@ -614,6 +652,7 @@ class GameApp {
       if (data.modes) {
         this.ui.renderGameModesCarousel(data.modes);
       }
+      this.acceptPendingInvite();
     });
 
     this.socket.on('onRoomsList', (rooms) => {
@@ -626,7 +665,9 @@ class GameApp {
 
     this.socket.on('onJoinedRoom', (roomData) => {
       this.currentRoom = roomData;
+      document.getElementById('room-invite-url')?.classList.add('hidden');
       this.myCurrentRole = null;
+      this.myVampireRole = null;
       this.lastGameState = null;
       if (this.renderer && typeof this.renderer.reset === 'function') {
         this.renderer.reset();
@@ -666,7 +707,7 @@ class GameApp {
       if (this.renderer && typeof this.renderer.reset === 'function') {
         this.renderer.reset();
       }
-      this.ui.showView('view-lobby');
+      this.ui.showView(this.accountTransition ? 'view-profile' : 'view-lobby');
       if (roomsData.rooms) {
         this.ui.renderRooms(roomsData.rooms, (roomId) => this.joinRoom(roomId));
       }
@@ -674,6 +715,7 @@ class GameApp {
 
     this.socket.on('onGameState', (state) => {
       if (!state) return;
+      if (!this.currentRoom || state.roomId !== this.currentRoom.roomId) return;
 
       // Auto-sync mode HUD if gameState mode differs from active HUD mode
       if (state.mode && (!this.currentRoom || this.currentRoom.mode !== state.mode)) {
@@ -688,7 +730,8 @@ class GameApp {
       // Check for space role reveal banner
       if (state.mode === 'space' && state.players) {
         const myP = state.players.find(p => p.id === this.socket.myPlayerId);
-        if (myP && myP.role && myP.role !== this.myCurrentRole) {
+        if(state.modeState.gameState==='waiting') this.myCurrentRole=null;
+        if (state.modeState.gameState==='playing' && myP && myP.role && myP.role !== this.myCurrentRole) {
           this.myCurrentRole = myP.role;
           this.ui.showRoleReveal(myP.role);
         }
@@ -810,16 +853,17 @@ class GameApp {
                     : (evt.winnerName
                       ? `👑 ${evt.winnerName} Haritayı Fethetti!`
                       : '✨ Oyun Bitti!'))));
-            audio.playGoal();
-            this.ui.showGoalBanner('🏆 OYUN BİTTİ!', evt.message || winTitle);
+            const isTeamResult=['space','puck'].includes(state.mode);
+            const ownResult=state.modeState.result?.players.find(p=>p.id===this.socket.myPlayerId);
+            if(!isTeamResult||ownResult?.outcome==='winner')audio.playGoal();
+            if(!['space','puck'].includes(state.mode)) this.ui.showGoalBanner('🏆 OYUN BİTTİ!', evt.message || winTitle);
 
             // Record XP and Match Stats Progression
+            if(isTeamResult&&!ownResult)return; // Spectators see the ceremony without earning a match result.
             const myP = (state.players || []).find(p => p.id === this.socket.myPlayerId);
             let isWinner = false;
-            if (state.mode === 'puck') {
-              isWinner = (evt.winner === 'red' && myP?.team === 'red') || (evt.winner === 'blue' && myP?.team === 'blue');
-            } else if (state.mode === 'space') {
-              isWinner = (evt.winner === 'impostor' && myP?.role === 'impostor') || (evt.winner === 'crew' && myP?.role !== 'impostor');
+            if (isTeamResult) {
+              isWinner = ownResult.outcome==='winner';
             } else if (state.mode === 'vampire') {
               isWinner = (evt.winner === 'vampires' && this.myVampireRole === 'vampire') || (evt.winner === 'villagers' && this.myVampireRole !== 'vampire');
             } else if (state.mode === 'conquest') {
@@ -956,9 +1000,22 @@ class GameApp {
     });
   }
 
-  joinRoom(roomId) {
+  acceptPendingInvite() {
+    if (!this.pendingInvite || this.socket.ws?.readyState !== WebSocket.OPEN ||
+        !document.getElementById('view-lobby').classList.contains('active')) return;
+    const roomId = this.pendingInvite;
+    this.pendingInvite = null;
+    this.joinRoom(roomId);
+  }
+
+  async joinRoom(roomId) {
     audio.init();
-    this.socket.joinRoom(roomId, this.profile);
+    try {
+      await this.authUI.ready;
+      const accessToken = await authClient.getAccessToken();
+      if (!this.profile.isGuest && !accessToken) throw new Error('Tekrar giriş yapmalısın.');
+      this.socket.joinRoom(roomId, this.profile, accessToken);
+    } catch (error) { this.ui.showToast(error.message); }
   }
 
   loop(currentTime) {
@@ -996,5 +1053,6 @@ class GameApp {
 
 // Bootstrap Application
 window.addEventListener('DOMContentLoaded', () => {
-  new GameApp();
+  window.audio = audio;
+  window.gameApp = new GameApp();
 });

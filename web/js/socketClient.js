@@ -7,47 +7,31 @@ export class SocketClient {
     this.ping = 0;
     this.pingInterval = null;
 
-    const urlParams = new URLSearchParams(window.location.search);
-    this.customSocket = urlParams.get('socket');
     this.retryCount = 0;
   }
 
   getCandidateUrls() {
-    if (this.customSocket) {
-      const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-      const host = window.location.hostname || 'localhost';
-      return [this.customSocket.startsWith('ws') ? this.customSocket : `${proto}${host}:${this.customSocket}`];
-    }
-
     const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    const host = window.location.hostname || 'localhost';
-
-    const list = [];
-    // 1. Primary Nginx reverse proxy endpoint (/ws) - Standard for Coolify domain & SSL
-    if (window.location.host) {
-      list.push(`${proto}${window.location.host}/ws`);
-    }
-
-    // 2. Direct socket port fallback (for local standalone testing)
-    if (host === 'localhost' || host === '127.0.0.1') {
-      list.push(`${proto}${host}:5050`);
-      list.push(`${proto}${host}:8080/ws`);
-    }
-
-    return list;
+    return [`${proto}${window.location.host}/ws`];
   }
 
   async connect() {
+    if (this.isConnected) return;
+    if (this.connectingPromise) return this.connectingPromise;
+    clearTimeout(this.reconnectTimer);
     const candidateUrls = this.getCandidateUrls();
     const url = candidateUrls[this.retryCount % candidateUrls.length];
     this.serverUrl = url;
 
-    return new Promise((resolve, reject) => {
+    this.connectingPromise = new Promise((resolve, reject) => {
       try {
         console.log(`🔌 [SocketClient] WebSocket bağlantısı deneniyor (${(this.retryCount % candidateUrls.length) + 1}/${candidateUrls.length}): ${this.serverUrl}`);
         this.ws = new WebSocket(this.serverUrl);
+        const ws = this.ws;
+        const timeout = setTimeout(() => { if (ws.readyState === WebSocket.CONNECTING) ws.close(); }, 5000);
 
         this.ws.onopen = () => {
+          clearTimeout(timeout);
           console.log(`✅ [SocketClient] WebSocket bağlantısı kuruldu: ${this.serverUrl}`);
           this.isConnected = true;
           this.startPingLoop();
@@ -56,13 +40,16 @@ export class SocketClient {
         };
 
         this.ws.onclose = () => {
+          clearTimeout(timeout);
+          this.connectingPromise = null;
+          reject(new Error('Bağlantı kapandı'));
           this.isConnected = false;
           this.stopPingLoop();
           if (this.handlers.onDisconnect) this.handlers.onDisconnect();
           
           this.retryCount++;
           const retryDelay = Math.min(2000, 500 * (this.retryCount % 4 + 1));
-          setTimeout(() => this.connect(), retryDelay);
+          this.reconnectTimer = setTimeout(() => this.connect().catch(() => {}), retryDelay);
         };
 
         this.ws.onerror = (err) => {
@@ -78,9 +65,11 @@ export class SocketClient {
           }
         };
       } catch (err) {
+        this.connectingPromise = null;
         reject(err);
       }
     });
+    return this.connectingPromise;
   }
 
   handleMessage(data) {
@@ -122,6 +111,13 @@ export class SocketClient {
       case 'error':
         if (this.handlers.onError) this.handlers.onError(data.message);
         break;
+      case 'auth_state':
+        this.authenticated = data.authenticated === true;
+        break;
+      case 'auth_expired':
+        this.authenticated = false;
+        if (this.handlers.onAuthExpired) this.handlers.onAuthExpired();
+        break;
     }
   }
 
@@ -144,13 +140,14 @@ export class SocketClient {
     }
   }
 
-  joinRoom(roomId, playerProfile) {
+  joinRoom(roomId, playerProfile, accessToken = null) {
     const payload = {
       type: 'join_room',
       roomId,
       name: playerProfile.name,
       color: playerProfile.color,
-      avatar: playerProfile.avatar
+      avatar: playerProfile.avatar,
+      ...(accessToken ? { accessToken } : {})
     };
 
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -174,6 +171,7 @@ export class SocketClient {
       tackleEnabled: roomConfig.tackleEnabled !== undefined ? roomConfig.tackleEnabled : true,
       maxPlayers: roomConfig.maxPlayers,
       isPrivate: roomConfig.isPrivate
+      ,mapTheme: roomConfig.mapTheme || 'spaceship'
     });
   }
 

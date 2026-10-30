@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 
 // Server-Side Authoritative Game Physics Settings (Anti-Cheat / DB Store)
-const DB_DIR = path.resolve(process.cwd(), 'data');
+const DB_DIR = process.env.DATA_DIR || fileURLToPath(new URL('../data/', import.meta.url));
 const DB_FILE = path.join(DB_DIR, 'game_config.json');
 
 // Perfectly Balanced & Calibrated Classic Disk Futbolu (Puck) / Sumo / Agar Constants
@@ -42,10 +43,12 @@ class ConfigDatabase {
         fs.mkdirSync(DB_DIR, { recursive: true });
       }
 
-      // Overwrite with calibrated balanced config
-      this.config = { ...DEFAULT_CONFIG };
-      this.save();
-      console.log('⚖️ [Config DB] Dengeli ve Optimize Fizik Ayarları Veritabanına Yazıldı.');
+      if (fs.existsSync(DB_FILE)) {
+        const saved = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+        for (const key of Object.keys(DEFAULT_CONFIG)) {
+          if (Number.isFinite(saved[key]) && saved[key] > 0) this.config[key] = saved[key];
+        }
+      } else this.save();
     } catch (err) {
       console.error('Config DB init error, using defaults:', err);
       this.config = { ...DEFAULT_CONFIG };
@@ -57,6 +60,7 @@ class ConfigDatabase {
   }
 
   set(key, value) {
+    if (!Object.hasOwn(DEFAULT_CONFIG, key) || !Number.isFinite(Number(value)) || Number(value) <= 0) return false;
     this.config[key] = Number(value);
     this.save();
   }

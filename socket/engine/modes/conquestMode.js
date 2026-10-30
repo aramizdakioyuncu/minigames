@@ -28,7 +28,6 @@ export class ConquestMode extends BaseMode {
     this.scores = new Map();        // playerId -> number of points
 
     // Direct duel state
-    this.currentDuel = null;        // { attackerId, defenderId, territoryId }
 
     this.initTerritories();
     this.initQuestions();
@@ -125,7 +124,7 @@ export class ConquestMode extends BaseMode {
 
   onPlayerJoin(player) {
     player.score = 0;
-    player.isSpectator = false;
+    player.isSpectator = !['waiting', 'game_over'].includes(this.gameState);
     if (!this.scores.has(player.id)) {
       this.scores.set(player.id, 0);
     }
@@ -135,10 +134,12 @@ export class ConquestMode extends BaseMode {
     for (const t of this.territories) {
       if (t.ownerId === player.id) {
         t.ownerId = null;
+        t.ownerName = null;
         t.color = '#475569';
       }
     }
     this.scores.delete(player.id);
+    this.playerAnswers.delete(player.id);
     this.pickerQueue = this.pickerQueue.filter(id => id !== player.id);
 
     if (this.activePickerId === player.id) {
@@ -147,13 +148,14 @@ export class ConquestMode extends BaseMode {
   }
 
   startMatch(callerName = 'Host') {
+    this.cancelTimers();
     this.gameState = 'waiting';
     this.currentRound = 1;
     this.winner = null;
     this.initTerritories();
     this.scores.clear();
 
-    const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
+    const players = Array.from(this.room.players.values());
     
     // 8 Geographically Opposite Starting Bases
     const OPPOSITE_STARTS = [
@@ -168,6 +170,7 @@ export class ConquestMode extends BaseMode {
     ];
 
     players.forEach((p, idx) => {
+      p.isSpectator = false;
       this.scores.set(p.id, 300);
       p.score = 300;
 
@@ -249,9 +252,10 @@ export class ConquestMode extends BaseMode {
     if ((actionData.type === 'submit_answer' || actionData.type === 'conquest_submit_answer') && this.gameState === 'question') {
       const player = this.room.players.get(playerId);
       if (!player || player.isSpectator) return;
+      if (this.playerAnswers.has(playerId)) return;
 
-      const numericVal = parseFloat(actionData.answer);
-      if (!isNaN(numericVal)) {
+      const numericVal = typeof actionData.answer === 'number' ? actionData.answer : NaN;
+      if (Number.isFinite(numericVal) && Math.abs(numericVal) <= 1e12) {
         this.playerAnswers.set(playerId, {
           answer: numericVal,
           submitTime: Date.now(),
@@ -278,12 +282,6 @@ export class ConquestMode extends BaseMode {
       }
     }
 
-    // 3. Attack Territory in Duel
-    if ((actionData.type === 'attack_territory' || actionData.type === 'conquest_attack_territory') && this.gameState === 'duel_pick') {
-      if (this.activePickerId === playerId) {
-        this.startDuel(playerId, actionData.territoryId);
-      }
-    }
   }
 
   resolveQuestion() {
@@ -351,10 +349,6 @@ export class ConquestMode extends BaseMode {
     // Limit queue to top players per round
     this.pickerQueue = this.pickerQueue.slice(0, Math.min(3, activePlayers.length));
 
-    setTimeout(() => {
-      if (this.gameState === 'game_over') return;
-      this.startConquerPickPhase();
-    }, this.resultDuration * 1000);
   }
 
   startConquerPickPhase() {
@@ -381,11 +375,12 @@ export class ConquestMode extends BaseMode {
   }
 
   claimTerritory(playerId, territoryId) {
+    if (this.gameState !== 'conquer_pick' || this.activePickerId !== playerId) return;
     const player = this.room.players.get(playerId);
     if (!player) return;
 
     const territory = this.territories.find(t => t.id === territoryId);
-    if (!territory) return;
+    if (!territory || territory.ownerId === playerId) return;
 
     territory.ownerId = playerId;
     territory.ownerName = player.name;
@@ -419,15 +414,13 @@ export class ConquestMode extends BaseMode {
   }
 
   advanceRound() {
+    this.activePickerId = null;
     this.currentRound++;
     if (this.currentRound > this.maxRounds) {
       this.endGame();
     } else {
-      setTimeout(() => {
-        if (this.gameState !== 'game_over') {
-          this.startQuestionPhase();
-        }
-      }, 2000);
+      this.gameState = 'intermission';
+      this.phaseTimer = 2;
     }
   }
 
@@ -439,7 +432,9 @@ export class ConquestMode extends BaseMode {
       }
     }
 
-    for (const [pId, score] of scoresMap.entries()) {
+    this.scores.clear();
+    for (const pId of this.room.players.keys()) {
+      const score = scoresMap.get(pId) || 0;
       this.scores.set(pId, score);
       const pl = this.room.players.get(pId);
       if (pl) pl.score = score;
@@ -455,6 +450,7 @@ export class ConquestMode extends BaseMode {
 
     const winnerPlayer = playerList[0];
     const winnerName = winnerPlayer ? winnerPlayer.name : 'Şampiyon';
+    this.winner = winnerPlayer?.id || null;
 
     this.room.broadcastEvent({
       type: 'game_over',
@@ -465,15 +461,23 @@ export class ConquestMode extends BaseMode {
 
     this.room.broadcastChat('Sistem', `🏆 OYUN BİTTİ! Haritanın hakimi ${winnerName} oldu!`, '#facc15');
 
-    setTimeout(() => this.resetGame(), 7000);
+    this.schedule(() => this.resetGame(), 7000);
   }
 
   resetGame() {
+    this.cancelTimers();
+    this.phaseTimer = 0;
     this.gameState = 'waiting';
     this.currentRound = 1;
     this.winner = null;
     this.initTerritories();
     this.scores.clear();
+    this.currentQuestion = null;
+    this.questionResults = null;
+    this.playerAnswers.clear();
+    this.pickerQueue = [];
+    this.activePickerId = null;
+    for (const p of this.room.players.values()) { p.score = 0; p.isSpectator = false; }
 
     this.room.broadcastChat('Sistem', '🏰 Lobi moduna dönüldü. Yeni fetih oyununu başlatabilirsiniz.', '#38bdf8');
   }
@@ -489,7 +493,11 @@ export class ConquestMode extends BaseMode {
   }
 
   handleTimeout() {
-    if (this.gameState === 'question') {
+    if (this.gameState === 'intermission') {
+      this.startQuestionPhase();
+    } else if (this.gameState === 'question_result') {
+      this.startConquerPickPhase();
+    } else if (this.gameState === 'question') {
       this.resolveQuestion();
     } else if (this.gameState === 'conquer_pick') {
       // Auto pick a random available territory (unowned or opponent's)

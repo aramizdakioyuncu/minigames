@@ -38,7 +38,7 @@ export class ProfileManager {
       const saved = localStorage.getItem(this.storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return {
+        const profile = {
           ...this.getDefaultProfile(),
           ...parsed,
           stats: {
@@ -46,31 +46,42 @@ export class ProfileManager {
             ...(parsed.stats || {})
           }
         };
+        profile.isGuest = true;
+        profile.authProvider = 'guest';
+        profile.email = null;
+        profile.name = typeof parsed.name === 'string' ? parsed.name.slice(0, 15) : 'Oyuncu';
+        profile.avatar = typeof parsed.avatar === 'string' ? parsed.avatar.slice(0, 8) : '⚽';
+        profile.color = /^#[0-9a-f]{6}$/i.test(parsed.color || '') ? parsed.color : '#3b82f6';
+        for (const key of ['level', 'xp', 'totalXp']) profile[key] = Number.isFinite(profile[key]) ? Math.max(key === 'level' ? 1 : 0, Math.min(profile[key], key === 'level' ? 1000 : 1e6)) : (key === 'level' ? 1 : 0);
+        for (const key of Object.keys(profile.stats)) profile.stats[key] = Number.isFinite(profile.stats[key]) ? Math.max(0, Math.min(profile.stats[key], 1e6)) : 0;
+        return profile;
       }
     } catch (e) {
       console.warn('Profile load error, fallback to default:', e);
     }
 
+    const profile = this.getDefaultProfile();
+    try {
     const legacyName = localStorage.getItem('ball_name');
     const legacyAvatar = localStorage.getItem('ball_avatar');
     const legacyColor = localStorage.getItem('ball_color');
-    const profile = this.getDefaultProfile();
     if (legacyName) profile.name = legacyName;
     if (legacyAvatar) profile.avatar = legacyAvatar;
     if (legacyColor) profile.color = legacyColor;
+    } catch { /* Storage may be disabled; an in-memory profile still works. */ }
     return profile;
   }
 
   saveProfile() {
     try {
-      localStorage.setItem(this.storageKey, JSON.stringify(this.profile));
+      localStorage.setItem(this.storageKey, JSON.stringify({ ...this.profile, email: null }));
       localStorage.setItem('ball_name', this.profile.name);
       localStorage.setItem('ball_avatar', this.profile.avatar);
       localStorage.setItem('ball_color', this.profile.color);
-      this.notifyUpdate();
     } catch (e) {
       console.error('Profile save error:', e);
     }
+    this.notifyUpdate();
   }
 
   getProfile() {
@@ -96,7 +107,7 @@ export class ProfileManager {
   }
 
   addXP(amount, reason = 'Oyun') {
-    if (amount <= 0) return { gained: 0, levelUp: false };
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 10000) return { gained: 0, levelUp: false };
 
     this.profile.xp += amount;
     this.profile.totalXp = (this.profile.totalXp || 0) + amount;
@@ -156,57 +167,33 @@ export class ProfileManager {
 
   // --- Auth & Login Methods ---
 
+  attachAccount(user) {
+    if (this.profile.authProvider === 'phatsa' && this.profile.id === user.id) return;
+    if (this.profile.isGuest) this.saveProfile();
+    this.storageKey = 'armoyu_account_profile_v1:' + user.id;
+    let saved = null;
+    try { saved = localStorage.getItem(this.storageKey); } catch { /* In-memory profile. */ }
+    this.profile = saved ? this.loadProfile() : this.getDefaultProfile();
+    this.profile.id = user.id;
+    this.profile.isGuest = false;
+    this.profile.authProvider = 'phatsa';
+    this.profile.email = user.email;
+    if (!saved) this.profile.name = user.full_name.slice(0, 15) || 'Oyuncu';
+    this.saveProfile();
+  }
+
+  detachAccount() {
+    this.storageKey = 'armoyu_player_profile_v2';
+    this.profile = this.loadProfile();
+    this.saveProfile();
+  }
+
   loginAsGuest(customName = null) {
     this.profile.isGuest = true;
     this.profile.authProvider = 'guest';
     if (customName && customName.trim().length > 0) {
       this.profile.name = customName.trim().substring(0, 15);
     }
-    this.saveProfile();
-    return this.profile;
-  }
-
-  loginWithCredentials(username, password) {
-    if (!username || username.trim().length < 2) {
-      throw new Error('Kullanıcı adı en az 2 karakter olmalıdır.');
-    }
-    this.profile.name = username.trim().substring(0, 15);
-    this.profile.isGuest = false;
-    this.profile.authProvider = 'local';
-    this.saveProfile();
-    return this.profile;
-  }
-
-  loginWithSocial(provider, mockUser = null) {
-    const validProviders = ['google', 'facebook'];
-    if (!validProviders.includes(provider)) {
-      throw new Error('Geçersiz sosyal sağlayıcı.');
-    }
-
-    const providerNames = {
-      google: 'Google Oyuncusu',
-      facebook: 'Facebook Oyuncusu'
-    };
-
-    const providerAvatars = {
-      google: '⚡',
-      facebook: '👑'
-    };
-
-    this.profile.isGuest = false;
-    this.profile.authProvider = provider;
-    this.profile.name = mockUser?.name || `${providerNames[provider]}_${Math.floor(Math.random() * 800 + 100)}`;
-    this.profile.email = mockUser?.email || `${provider}_user@armoyu.com`;
-    if (!mockUser?.keepAvatar) {
-      this.profile.avatar = providerAvatars[provider] || this.profile.avatar;
-    }
-
-    // Award first-time social login bonus XP (+100 XP)
-    if (!this.profile.hasReceivedSocialBonus) {
-      this.profile.hasReceivedSocialBonus = true;
-      this.addXP(100, `🎉 ${provider.toUpperCase()} Giriş Bonusu`);
-    }
-
     this.saveProfile();
     return this.profile;
   }

@@ -100,9 +100,10 @@ export class VampireMode extends BaseMode {
     player.damping = 0.92;
     player.restitution = 0.4;
     player.isAlive = true;
-    player.isSpectator = false;
+    player.isSpectator = !['waiting', 'game_over'].includes(this.gameState);
     player.role = 'villager'; // 'vampire', 'doctor', 'seer', 'hunter', 'villager'
     player.hasActed = false;
+    player.hunterRevengeAvailable = false;
 
     // Spawn around town square fountain
     this.spawnAtTownSquare(player);
@@ -142,14 +143,21 @@ export class VampireMode extends BaseMode {
   }
 
   startMatch(callerName = 'Host') {
+    if (this.room.players.size < 3) {
+      this.room.broadcastChat('Sistem', 'Vampir Köylü için en az 3 oyuncu gerekli.', '#facc15');
+      return;
+    }
+    this.cancelTimers();
     this.dayCount = 1;
     this.winner = null;
     this.lastNightReport = null;
     this.lastTrialReport = null;
     this.resetRoundState();
 
-    const players = Array.from(this.room.players.values()).filter(p => !p.isSpectator);
+    const players = Array.from(this.room.players.values());
     players.forEach(p => {
+      p.isSpectator = false;
+      p.hunterRevengeAvailable = false;
       p.isAlive = true;
       p.hasActed = false;
       this.spawnAtTownSquare(p);
@@ -286,7 +294,10 @@ export class VampireMode extends BaseMode {
   handleAction(playerId, actionData) {
     if (!actionData || !actionData.type) return;
 
-    if (actionData.type === 'start_match') {
+    if (actionData.type === 'stop_match' || (actionData.type === 'toggle_match' && !['waiting', 'game_over'].includes(this.gameState))) {
+      this.resetGame(); return;
+    }
+    if (['start_match', 'start_game', 'toggle_match'].includes(actionData.type)) {
       const player = this.room.players.get(playerId);
       const callerName = player ? player.name : 'Host';
       this.startMatch(callerName);
@@ -294,11 +305,16 @@ export class VampireMode extends BaseMode {
     }
 
     // 1. NIGHT ACTIONS
-    if (this.gameState === 'night') {
+    if (this.gameState === 'night' && ['vampire_vote', 'doctor_heal', 'seer_investigate'].includes(actionData.type)) {
       const player = this.room.players.get(playerId);
       if (!player || !player.isAlive || player.isSpectator) return;
+      if (player.hasActed) return;
+      const target = this.room.players.get(actionData.targetId);
+      if (actionData.targetId !== 'skip' && (!target || !target.isAlive || target.isSpectator)) return;
+      if (actionData.targetId === 'skip') { player.hasActed = true; return; }
 
       if (actionData.type === 'vampire_vote' && player.role === 'vampire') {
+        if (target.role === 'vampire') return;
         this.nightActions.vampireVotes.set(playerId, actionData.targetId);
         player.hasActed = true;
 
@@ -318,6 +334,7 @@ export class VampireMode extends BaseMode {
         this.nightActions.doctorLastTarget = actionData.targetId;
         player.hasActed = true;
       } else if (actionData.type === 'seer_investigate' && player.role === 'seer') {
+        if (actionData.targetId === playerId) return;
         const target = this.room.players.get(actionData.targetId);
         if (target) {
           this.nightActions.seerTarget = target.id;
@@ -335,11 +352,13 @@ export class VampireMode extends BaseMode {
     }
 
     // 2. TRIAL VOTING ACTIONS
-    if (this.gameState === 'voting') {
+    if (this.gameState === 'voting' && actionData.type === 'trial_vote') {
       const player = this.room.players.get(playerId);
       if (!player || !player.isAlive || player.isSpectator) return;
 
       if (actionData.type === 'trial_vote') {
+        const target = this.room.players.get(actionData.targetId);
+        if (actionData.targetId !== 'skip' && (!target || !target.isAlive || target.isSpectator)) return;
         this.trialVotes.set(playerId, actionData.targetId); // 'skip' or candidate playerId
         player.hasActed = true;
 
@@ -351,9 +370,10 @@ export class VampireMode extends BaseMode {
     // 3. HUNTER REVENGE SHOT
     if (actionData.type === 'hunter_revenge') {
       const player = this.room.players.get(playerId);
-      if (player && player.role === 'hunter' && !player.isAlive) {
+      if (player && player.role === 'hunter' && !player.isAlive && player.hunterRevengeAvailable && !['waiting', 'game_over'].includes(this.gameState)) {
         const target = this.room.players.get(actionData.targetId);
-        if (target && target.isAlive) {
+        if (target && target.isAlive && !target.isSpectator) {
+          player.hunterRevengeAvailable = false;
           target.isAlive = false;
           this.room.broadcastEvent({
             type: 'vampire_hunter_revenge_result',
@@ -426,6 +446,7 @@ export class VampireMode extends BaseMode {
 
           // If victim is hunter, prompt for revenge shot
           if (victim.role === 'hunter') {
+            this.grantHunterRevenge(victim);
             this.room.sendToPlayer(victim.id, {
               type: 'vampire_hunter_prompt',
               message: 'Avlandın! Son bir kişiyi yanında götürmek için hedef seç.'
@@ -482,6 +503,7 @@ export class VampireMode extends BaseMode {
 
         // If hunter is executed, allow revenge shot
         if (executedPlayer.role === 'hunter') {
+          this.grantHunterRevenge(executedPlayer);
           this.room.sendToPlayer(executedPlayer.id, {
             type: 'vampire_hunter_prompt',
             message: 'İdam edildin! Son kurşununla birini vurmak için hedef seç.'
@@ -509,17 +531,28 @@ export class VampireMode extends BaseMode {
     }
 
     if (!this.checkWinConditions()) {
+      this.gameState = 'trial_result';
       this.dayCount++;
-      setTimeout(() => {
+      this.schedule(() => {
         if (this.gameState !== 'game_over') {
           this.startNightPhase();
         }
-      }, 4000);
+      }, executedPlayer?.hunterRevengeAvailable ? 15500 : 4000);
     }
+  }
+
+  grantHunterRevenge(player) {
+    player.hunterRevengeAvailable = true;
+    this.schedule(() => {
+      player.hunterRevengeAvailable = false;
+      this.checkWinConditions();
+    }, 15000);
   }
 
   checkWinConditions() {
     if (this.gameState === 'waiting' || this.gameState === 'game_over') return false;
+    // The last shot can change the winner. A disconnected or idle hunter cannot stall indefinitely.
+    if ([...this.room.players.values()].some(p => p.hunterRevengeAvailable)) return false;
 
     const alivePlayers = Array.from(this.room.players.values()).filter(p => !p.isSpectator && p.isAlive);
     const aliveVampires = alivePlayers.filter(p => p.role === 'vampire');
@@ -535,7 +568,7 @@ export class VampireMode extends BaseMode {
         message: '🎉 KÖYLÜLER KAZANDI! Tüm Vampirler Ortadan Kaldırıldı!'
       });
       this.room.broadcastChat('Sistem', '🏆 KÖYLÜLER KAZANDI! Köy karanlıktan kurtuldu.', '#10b981');
-      setTimeout(() => this.resetGame(), 6000);
+      this.schedule(() => this.resetGame(), 6000);
       return true;
     }
 
@@ -549,7 +582,7 @@ export class VampireMode extends BaseMode {
         message: '🩸 VAMPİRLER KAZANDI! Köy Tamamen Karanlığa Gömüldü!'
       });
       this.room.broadcastChat('Sistem', '🏆 VAMPİRLER KAZANDI! Köyün kontrolü vampirlerin eline geçti.', '#ef4444');
-      setTimeout(() => this.resetGame(), 6000);
+      this.schedule(() => this.resetGame(), 6000);
       return true;
     }
 
@@ -557,6 +590,8 @@ export class VampireMode extends BaseMode {
   }
 
   resetGame() {
+    this.cancelTimers();
+    this.phaseTimer = 0;
     this.gameState = 'waiting';
     this.winner = null;
     this.dayCount = 1;
@@ -564,6 +599,8 @@ export class VampireMode extends BaseMode {
 
     const players = Array.from(this.room.players.values());
     players.forEach(p => {
+      p.isSpectator = false;
+      p.hunterRevengeAvailable = false;
       p.isAlive = true;
       p.role = 'villager';
       p.hasActed = false;
@@ -678,7 +715,9 @@ export class VampireMode extends BaseMode {
         avatar: p.avatar,
         color: p.color,
         isAlive: p.isAlive,
+        isSpectator: p.isSpectator,
         role: p.role,
+        hunterRevengeAvailable: !!p.hunterRevengeAvailable,
         hasActed: p.hasActed
       }))
     };

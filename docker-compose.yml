@@ -1,4 +1,25 @@
 services:
+  minigames_backend:
+    build: ./minigames_backend
+    restart: always
+    environment:
+      - PORT=4100
+      - HOST=0.0.0.0
+      - AUTH_TRUST_PROXY=1
+      - PHATSA_URL=${PHATSA_URL:-}
+      - PHATSA_API_KEY=${PHATSA_API_KEY:-}
+      - AUTH_ALLOWED_ORIGINS=${AUTH_ALLOWED_ORIGINS:-}
+    expose:
+      - "4100"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4100/api/auth/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - ball_net
+
   # 1. Signalling & REST API Backend (Dahili Servis)
   backend:
     build:
@@ -6,9 +27,15 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
-      - PORT=${BACKEND_PORT:-4000}
+      - PORT=4000
     expose:
-      - "${BACKEND_PORT:-4000}"
+      - "4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     networks:
       - ball_net
 
@@ -19,13 +46,20 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
-      - PORT=${SOCKET_PORT:-5050}
+      - PORT=5050
+      - AUTH_SERVICE_URL=http://minigames_backend:4100
+      - TRUST_PROXY=1
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
     volumes:
       - socket_data:/app/data
-    ports:
-      - "${SOCKET_PORT:-5050}:${SOCKET_PORT:-5050}"
     expose:
-      - "${SOCKET_PORT:-5050}"
+      - "5050"
+    healthcheck:
+      test: ["CMD", "node", "-e", "const W=require('ws');const w=new W('ws://127.0.0.1:5050');w.on('open',()=>{w.close();process.exit(0)});w.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),3000)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     networks:
       - ball_net
 
@@ -35,11 +69,17 @@ services:
       context: ./web
       dockerfile: Dockerfile
     restart: always
+    ports:
+      - "${WEB_PORT:-8080}:80"
     expose:
       - "80"
     depends_on:
-      - backend
-      - socket
+      minigames_backend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      socket:
+        condition: service_healthy
     networks:
       - ball_net
 
